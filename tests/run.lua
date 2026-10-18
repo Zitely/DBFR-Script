@@ -235,7 +235,7 @@ test("partially failing input is released by reset", function()
     r:reset(); equal(input.events[1], "-q"); equal(next(r.held), nil)
 end)
 
-require("tests.loader")(test, equal)
+require("tests.http_loader")(test, equal)
 
 local mock = require("tests.roblox_mock")
 mock.install()

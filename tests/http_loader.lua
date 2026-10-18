@@ -31,10 +31,10 @@ return function(test, equal)
             end
             return _G[name]
         end})
-        local file = assert(io.open("loader.lua", "r"))
+        local file = assert(io.open("http_loader.lua", "r"))
         local source = file:read("*a")
         file:close()
-        local loader = assert(compileIn(source, "@loader.lua", sandbox))
+        local loader = assert(compileIn(source, "@http_loader.lua", sandbox))
         local ok, result = pcall(loader)
         return ok, result, requests, saved, compiledSources
     end

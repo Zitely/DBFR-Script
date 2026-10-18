@@ -12,7 +12,7 @@ live input acceptance still need an initial in-game check.
 
 ## Run
 
-1. **Sign into GitHub**, open **[`dist/chamber.lua`](dist/chamber.lua)**, and use
+1. **Sign into GitHub**, open **[`loader.lua`](loader.lua)**, and use
    **Copy raw file** to copy its complete contents. Paste the actual Lua code into
    your executor and execute it. This works with a private repository. The single
    file contains the whole app; no downloaded UI library or Python is needed.
@@ -32,50 +32,41 @@ live input acceptance still need an initial in-game check.
 Start with the game at its training hub. Automation starts paused on each fresh
 execution. Re-executing the script unloads the previous instance first.
 
+**`loader.lua` now contains the entire application.** Its first line is:
+
+```lua
+-- CHAMBER FULL SCRIPT - no download needed.
+```
+
+Replace the entire contents of your executor tab with this file, then execute it.
+`dist/chamber.lua` contains the same program. Both start without HTTP or
+`loadstring`; there is no extra file to fetch at startup.
+
 **Private repository:** GitHub currently marks `Zitely/DBFR-Script` as private.
 Your executor does not inherit your browser's GitHub sign-in, so the HTTP launcher
 receives `404: Not Found`. Use the direct-copy instructions above. An authenticated
 cloud workspace downloading the file successfully does not prove an executor can
 download it. The full bundle starts without HTTP or `loadstring`.
 
-The optional [`loader.lua`](loader.lua) requires a publicly readable repository URL.
-If the repository is deliberately made public later, it downloads the bundle from
-[`Zitely/DBFR-Script`](https://github.com/Zitely/DBFR-Script) and caches a copy for
-optional teleport reload. Paste its **complete contents** into your executor to
-get separate download, compilation, and startup errors. The short launcher below
-also checks the functions that the previous one-line launcher called blindly:
-
-```lua
-local compile = loadstring
-assert(type(compile) == "function",
-    "loadstring is unavailable. Paste the complete dist/chamber.lua file instead.")
-local ok, source = pcall(function()
-    return game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/loader.lua")
-end)
-assert(ok, "Loader download failed: " .. tostring(source))
-assert(type(source) == "string" and not source:match("^%s*404"),
-    "GitHub returned 404. Sign into GitHub and copy the complete dist/chamber.lua file instead.")
-local run, reason = compile(source, "Chamber launcher")
-assert(type(run) == "function", "Loader compilation failed: " .. tostring(reason))
-run()
-```
-
-The loader requires a publicly readable raw URL and executor HTTP support. If
-either is unavailable, paste the complete `dist/chamber.lua` file instead.
+The old download-based entry point is retained as [`http_loader.lua`](http_loader.lua)
+for publicly readable repositories only. It reports download, compilation, and
+startup errors separately and caches the bundle for optional teleport reload.
+It cannot download this private repository without GitHub authentication.
 
 ### `Expected identifier ... got '404'`
 
 The downloaded text was a GitHub error response, not the Lua script. A private
 repository returns 404 to requests without GitHub authentication; missing files
 and incorrect URLs can also return it. Sign into GitHub and copy the complete
-[`dist/chamber.lua`](dist/chamber.lua) source directly into the executor. The
-updated loader recognizes 404 and HTML responses before attempting compilation.
+[`loader.lua`](loader.lua) source directly into the executor. If the error says
+`Chamber download failed`, the executor is still running the old HTTP downloader;
+replace the tab's contents with the new full script.
 
 ### `:1: attempt to call a nil value`
 
 The old one-line launcher could produce this if `loadstring` was missing, or if
 compilation returned no function. The line number alone does not identify which
-call failed. Use the checked launcher above or paste the full bundle directly;
+call failed. Paste the full `loader.lua` bundle directly;
 the full bundle needs neither HTTP nor `loadstring` to start. If it still fails,
 share the full error and executor name. Ordinary Roblox LocalScripts do not
 provide the executor capabilities this application uses.
@@ -180,7 +171,8 @@ The original Python repository is a separate project. This checkout contains:
 | `src/UI.lua` | Native Roblox Dragon Ball dashboard |
 | `src/Main.lua` | Lifecycle, settings, hotkeys, and optional teleport reload |
 | `src/Timer.lua`, `src/Config.lua` | Countdown verification and validated defaults |
-| `dist/chamber.lua` | Self-contained executor bundle |
+| `loader.lua`, `dist/chamber.lua` | Identical self-contained executor bundles; no startup download |
+| `http_loader.lua` | Optional downloader for publicly readable repositories |
 
 From the repository root, with Lua 5.1+ or LuaJIT installed:
 

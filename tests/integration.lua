@@ -145,6 +145,23 @@ return function(test, equal, mock)
         for _, c in ipairs(mock.runService.Heartbeat.listeners) do if c.Connected then connected = connected + 1 end end
         equal(connected, 1); second.unload()
     end)
+    test("root loader starts the dashboard without HTTP or loadstring", function()
+        mock.reset()
+        local downloads = 0
+        game.HttpGet = function()
+            downloads = downloads + 1
+            error("404: Not Found")
+        end
+        local compile = loadstring
+        loadstring = nil
+        local ok, app = pcall(function() return assert(loadfile("loader.lua"))() end)
+        loadstring = compile
+        assert(ok, app)
+        equal(app.version, "1.0.0"); equal(app.ui.window.Visible, true)
+        equal(downloads, 0)
+        mock.tick(); equal(app.ui.stateLabel.Text, "PAUSED")
+        app.unload()
+    end)
     test("the actual dashboard Run button starts and its floating badge pauses", function()
         mock.reset()
         local app = require("src.Main").start()

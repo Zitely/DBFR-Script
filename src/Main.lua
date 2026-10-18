@@ -52,7 +52,7 @@ function Main.start()
         if type(env.readfile) ~= "function" then log("Teleport reload requires the loader and executor file storage"); return end
         local hasSource, source = pcall(env.readfile, "DBFR_Lua/chamber.lua")
         if not hasSource or type(source) ~= "string" or #source < 100 then
-            log("Use loader.lua once to cache Chamber before enabling teleport reload")
+            log("Save the full loader.lua file as DBFR_Lua/chamber.lua in your executor workspace before enabling teleport reload")
             return
         end
         local ok, err = pcall(queue, [[
