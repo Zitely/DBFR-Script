@@ -21,8 +21,9 @@ function Main.start()
     local config = Config.new(type(saved.config) == "table" and saved.config or {})
     local ui, engine, bindings, rhythm
     local input = Input.new(env)
-    local live, bindingToken, queueRegistered = true, 0, false
-    local actionRunning, nextEngine, nextUI = false, 0, 0
+    local live, queueRegistered = true, false
+    local actionRunning, nextEngine, nextUI, lastTick = false, 0, 0, -math.huge
+    local wasPlaying = false
     local reportedBindingErrors = {}
     local connections = {}
     local function log(message)
@@ -73,21 +74,22 @@ end)
         else log("Teleport queue failed: " .. tostring(err)) end
     end
     local function stop()
-        bindingToken = bindingToken + 1
         engine:setActive(false, os.clock())
         release()
+        bindings:pause()
+        wasPlaying = false
         save()
+        if live and ui then ui:updateFeature("chamber", engine, rhythm, os.clock()) end
     end
     local function toggle()
         if not live then return end
-        bindingToken = bindingToken + 1
-        if engine.active then stop(); ui:setVisible(true)
+        if engine.active then stop()
         else
             release()
             bindings.lastKinds, bindings.activeChallenge = {}, nil
             engine:setActive(true, os.clock())
             save(); registerQueue()
-            ui:setVisible(false)
+            ui:updateFeature("chamber", engine, rhythm, os.clock())
         end
     end
     local function unload()
@@ -106,61 +108,20 @@ end)
         if ok then parent = result end
     end
     parent = parent or player:WaitForChild("PlayerGui")
-    ui = UI.new(parent, config, {
-        toggle = toggle, close = unload,
-        show = function() if engine.active then stop() end end,
-        setting = function(key, value)
-            -- An in-flight input retains the same backend, but all automation stops before settings change.
-            stop()
-            local changed = Config.new({[key] = value})
-            config[key] = changed[key]
-            save()
-            ui:notify("Saved. Press POWER UP when ready.")
-        end,
-        clearBinding = function(role)
-            stop(); bindings.saved[role] = nil; save(); ui:notify("Reset " .. role .. " to automatic detection")
-        end,
-        bind = function(role)
-            stop()
-            local token = bindingToken
-            ui.window.Visible, ui.pill.Visible = false, false
-            task.spawn(function()
-                for seconds = 3, 1, -1 do
-                    if not live or token ~= bindingToken then return end
-                    ui:notify("Hover " .. role .. " in Roblox — capturing in " .. seconds, 1.2)
-                    task.wait(1)
-                end
-                if not live or token ~= bindingToken then return end
-                bindings.nextScan = 0
-                bindings:refresh(os.clock())
-                local position = game:GetService("UserInputService"):GetMouseLocation()
-                local target = bindings:pick(position.X, position.Y)
-                local ok, message = bindings:bind(role, target)
-                if ok then save() end
-                ui:setVisible(true); ui:notify(message, 5); log(message)
-            end)
-        end,
-    })
+    ui = UI.new(parent)
+    ui:addFeature("chamber", "CHAMBER AUTO TRAIN", toggle)
     bindings = Bindings.new(player, saved.bindings, ui.gui)
-    env.__DBFR_APP = {unload = unload, toggle = toggle, version = "1.0.0", ui = ui}
-    log("Chamber 1.0.0 loaded. Start paused; map any unidentified prompt icons in Calibration.")
+    env.__DBFR_APP = {unload = unload, toggle = toggle, version = "1.1.0", ui = ui, scanner = bindings}
+    log("Chamber 1.1.0 loaded. Use the Chamber toggle to start or stop.")
     log(input:description())
     if type(env.writefile) ~= "function" then log("File storage unavailable: settings last for this session only") end
-    local uis = game:GetService("UserInputService")
-    connections[#connections + 1] = uis.InputBegan:Connect(function(key, processed)
-        -- F7 always works, including while a text field is focused.
-        if key.KeyCode == Enum.KeyCode.F7 then unload(); return end
-        if processed or uis:GetFocusedTextBox() then return end
-        if key.KeyCode == Enum.KeyCode.F6 then toggle()
-        elseif key.KeyCode == Enum.KeyCode.RightShift then
-            if not ui.window.Visible and engine.active then stop() end
-            ui:setVisible(not ui.window.Visible)
-        end
-    end)
+    ui:updateFeature("chamber", engine, rhythm, os.clock())
     local snapshot = {notes = {}, training = false}
     connections[#connections + 1] = game:GetService("RunService").Heartbeat:Connect(function()
-        if not live then return end
+        if not live or not engine.active then return end
         local now = os.clock()
+        if now - lastTick < 1 / 60 - 0.001 then return end
+        lastTick = now
         local ok, reason = pcall(function()
             snapshot = bindings:snapshot(now)
             for _, detail in ipairs(bindings.errors) do
@@ -174,11 +135,13 @@ end)
                 if previousState == "training" and engine.state ~= "training" then
                     bindings.lastKinds, bindings.activeChallenge = {}, nil
                 end
-                if wasActive and not engine.active then save(); ui:setVisible(true) end
+                if wasActive and not engine.active then
+                    release(); bindings:pause(); wasPlaying = false
+                    save(); ui:updateFeature("chamber", engine, rhythm, now)
+                end
                 if action and not actionRunning then
                     actionRunning = true
                     release()
-                    ui:setVisible(false)
                     local target = snapshot.controls[action.kind]
                     task.spawn(function()
                         local succeeded, detail = pcall(input.click, input, target, config,
@@ -186,7 +149,10 @@ end)
                             action.kind == "start")
                         engine:complete(action, succeeded, os.clock(), detail)
                         actionRunning = false
-                        if live then save() end
+                        if live then
+                            if not engine.active then bindings:pause(); release(); wasPlaying = false end
+                            save(); ui:updateFeature("chamber", engine, rhythm, os.clock())
+                        end
                     end)
                 elseif action then
                     -- A cancelled action may still be unwinding its release; retry only after it exits.
@@ -195,15 +161,20 @@ end)
             end
             if engine:canPlay(snapshot) and not actionRunning then
                 rhythm:step(snapshot.notes, snapshot.challenge, now)
-            elseif not actionRunning then rhythm:reset() end
+                wasPlaying = true
+            elseif wasPlaying and not actionRunning then
+                rhythm:reset()
+                wasPlaying = false
+            end
             if now >= nextUI then
-                nextUI = now + 0.2
-                ui:update(engine, rhythm, bindings, input:description(), now)
+                nextUI = now + 0.4
+                ui:updateFeature("chamber", engine, rhythm, now)
             end
         end)
         if not ok then
             engine:halt(now, "Stopped: " .. tostring(reason))
-            release(); save(); ui:setVisible(true)
+            release(); bindings:pause(); wasPlaying = false
+            save(); ui:updateFeature("chamber", engine, rhythm, now)
         end
     end)
     if env.__DBFR_AUTORESUME then

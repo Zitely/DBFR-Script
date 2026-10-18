@@ -25,22 +25,55 @@ local guiTypes = {Frame = true, ScrollingFrame = true, TextLabel = true, TextBut
     TextBox = true, ImageLabel = true, ImageButton = true, CanvasGroup = true}
 function instance:__index(key) return methods[key] or self.props[key] end
 function instance:__newindex(key, value)
+    local oldValue = self.props[key]
     if key == "Parent" then
         local old = self.props.Parent
+        local objects = {self}
+        local function descendants(node)
+            for _, child in ipairs(node.children) do objects[#objects + 1] = child; descendants(child) end
+        end
+        descendants(self)
+        local current = old
+        while current do
+            for _, object in ipairs(objects) do current.DescendantRemoving:Fire(object) end
+            current = current.Parent
+        end
         if old then
             for i, child in ipairs(old.children) do if child == self then table.remove(old.children, i); break end end
         end
         if value then value.children[#value.children + 1] = self end
+        self.props.Parent = value
+        current = value
+        while current do
+            for _, object in ipairs(objects) do current.DescendantAdded:Fire(object) end
+            current = current.Parent
+        end
     end
     self.props[key] = value
+    if oldValue ~= value and self.signals[key] then self.signals[key]:Fire() end
+end
+function methods:GetPropertyChangedSignal(key)
+    self.signals[key] = self.signals[key] or signal()
+    return self.signals[key]
+end
+function methods:GetAttribute(key) return self.attributes[key] end
+function methods:SetAttribute(key, value)
+    self.attributes[key] = value
+    self.AttributeChanged:Fire(key)
 end
 function methods:IsA(class)
+    if M.metrics then M.metrics.typeChecks = M.metrics.typeChecks + 1 end
     return self.ClassName == class or (class == "GuiObject" and guiTypes[self.ClassName] == true)
         or (class == "GuiButton" and (self.ClassName == "TextButton" or self.ClassName == "ImageButton"))
         or (class == "LayerCollector" and self.ClassName == "ScreenGui")
 end
-function methods:GetChildren() return self.children end
+function methods:GetChildren()
+    if M.metrics then M.metrics.childrenReads = M.metrics.childrenReads + 1 end
+    if self.denyRead then error("Permission denied") end
+    return self.children
+end
 function methods:GetDescendants()
+    if M.metrics then M.metrics.fullScans = M.metrics.fullScans + 1 end
     if self.denyRead then error("Permission denied") end
     local result = {}
     local function collect(node)
@@ -82,10 +115,11 @@ function methods:GetGuiObjectsAtPosition(x, y)
     return result
 end
 function M.object(class, name, parent, props)
-    local object = setmetatable({children = {}, props = {ClassName = class, Name = name or class,
+    local object = setmetatable({children = {}, signals = {}, attributes = {}, props = {ClassName = class, Name = name or class,
         Visible = true, Enabled = true, AbsolutePosition = M.vector(0, 0), AbsoluteSize = M.vector(100, 30),
         ImageRectOffset = M.vector(0, 0), ImageRectSize = M.vector(0, 0), Image = "", Text = "",
-        Activated = signal(), InputBegan = signal(), InputEnded = signal(), FocusLost = signal()}}, instance)
+        Activated = signal(), InputBegan = signal(), InputEnded = signal(), FocusLost = signal(),
+        DescendantAdded = signal(), DescendantRemoving = signal(), AttributeChanged = signal()}}, instance)
     for key, value in pairs(props or {}) do object[key] = value end
     object.Parent = parent
     return object
@@ -110,6 +144,7 @@ function M.install()
     M.reset()
 end
 function M.reset()
+    M.resetMetrics()
     M.now, M.pendingTasks, M.waitHook = 0, {}, nil
     M.root = M.object("DataModel", "game")
     game = M.root
@@ -144,6 +179,9 @@ function M.reset()
     end, spawn = function(fn) M.pendingTasks[#M.pendingTasks + 1] = fn end}
     M.env = {}
     getgenv = function() return M.env end
+end
+function M.resetMetrics()
+    M.metrics = {fullScans = 0, childrenReads = 0, typeChecks = 0}
 end
 function M.flush()
     local pending = M.pendingTasks

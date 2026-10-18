@@ -113,7 +113,7 @@ function Engine:step(s, now)
     end
     if self.state == "respawn_menu" then
         if s.respawn and not c.dryRun then return self:action("respawn", now) end
-        if now - self.since > 4 then self:halt(now, "Respawn entry was not found; bind it in Calibration") end
+        if now - self.since > 4 then self:halt(now, "Respawn entry was not recognized; Chamber paused") end
         return nil
     elseif self.state == "respawn_confirm" then
         if s.confirm and not c.dryRun then return self:action("confirm", now) end
@@ -136,7 +136,7 @@ function Engine:step(s, now)
         self.fresh = 0
         if c.autoStart and not c.dryRun and now >= (self.nextStart or 0) then
             if self.startCount >= c.startAttempts then
-                self:halt(now, "Start retry limit reached; check the Start binding")
+                self:halt(now, "Start retry limit reached; check the game screen")
             else return self:action("start", now) end
         end
         return nil
@@ -160,14 +160,14 @@ function Engine:step(s, now)
     local stalled = (self.state == "seeking" or self.state == "starting") and now - self.since >= grace
     if (missing or stalled) and c.autoRecover and not c.dryRun then
         if not s.bindingsReady then
-            self:halt(now, "Map the prompt icons and training targets in Calibration first")
+            self:halt(now, "Chamber prompts were not recognized automatically; game compatibility needs an update")
         elseif self.recoveryCount >= c.recoveryAttempts then
             self:halt(now, "Recovery retry limit reached")
         elseif s.menu then
             self.recoveryCount = self.recoveryCount + 1
             self.requiresStart = true
             return self:action("menu", now)
-        else self:halt(now, "Lines menu not found; bind Menu in Calibration") end
+        else self:halt(now, "Lines menu was not recognized; Chamber paused") end
     end
     return nil
 end

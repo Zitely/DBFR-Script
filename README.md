@@ -1,193 +1,157 @@
-# DBFR-Script · CHAMBER / Saiyan Control
+# DBFR-Script · Saiyan Hub
 
-A separate Lua/Luau edition of the DBFR Chamber training helper, built for a Roblox
-script executor. The interface uses an orange and gold Dragon Ball theme, seven
-Dragon Balls, a blue HTC countdown, a training dashboard, calibration, settings,
-and an activity log. All application, build, and test source is Lua.
-
-**Status:** implemented and tested offline with Roblox API doubles. This has not
-been run inside the DBFR game or your executor. Image-only prompts need calibration
-unless their names already identify their button. The game-specific bindings and
-live input acceptance still need an initial in-game check.
+A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
+orange and gold Dragon Ball themed hub. **Version 1.1.0 has one Chamber toggle,
+no keyboard shortcuts, and no manual calibration.** The hub supports additional
+feature rows as the project grows.
 
 ## Run
 
-1. **Sign into GitHub**, open **[`loader.lua`](loader.lua)**, and use
-   **Copy raw file** to copy its complete contents. Paste the actual Lua code into
-   your executor and execute it. This works with a private repository. The single
-   file contains the whole app; no downloaded UI library or Python is needed.
-2. Open **Calibration**. Start, Respawn, Reconnect, and the bottom-right timer are
-   found by visible text when possible. Bind unidentified controls as described below.
-3. Press **POWER UP** or **F6**. The window collapses to a small badge, leaving the
-   game controls clear. Clicking the badge pauses automation and opens the panel.
+1. Sign into GitHub, open **[`loader.lua`](loader.lua)**, and choose **Copy raw file**.
+2. Replace the **entire contents** of your executor tab with that code and execute it.
+3. At the game's training hub, click **CHAMBER AUTO TRAIN** to turn automation on.
+   Click the same button again to stop. Drag the header to move the panel.
 
-| Control | Action |
-| --- | --- |
-| F6 | Run / pause |
-| F7 | Unload and release held inputs |
-| Right Shift | Show / hide; opening the panel pauses training |
-| Header dash | Collapse to the badge |
-| Header × | Unload |
+The panel displays the current action and bottom-right HTC timer. Fresh execution
+starts with Chamber off. Running the script again unloads its previous instance,
+releases held inputs, and disconnects the old loop before creating the new panel.
 
-Start with the game at its training hub. Automation starts paused on each fresh
-execution. Re-executing the script unloads the previous instance first.
-
-**`loader.lua` now contains the entire application.** Its first line is:
+`loader.lua` and `dist/chamber.lua` are identical, self-contained programs. Their
+first line is:
 
 ```lua
 -- CHAMBER FULL SCRIPT - no download needed.
 ```
 
-Replace the entire contents of your executor tab with this file, then execute it.
-`dist/chamber.lua` contains the same program. Both start without HTTP or
-`loadstring`; there is no extra file to fetch at startup.
+They need no HTTP request, `loadstring`, Python, or downloaded UI library to start.
+The repository is private: an executor cannot use your browser's GitHub sign-in.
+The optional [`http_loader.lua`](http_loader.lua) is for publicly readable
+repositories only; it cannot download this private repository unauthenticated.
 
-**Private repository:** GitHub currently marks `Zitely/DBFR-Script` as private.
-Your executor does not inherit your browser's GitHub sign-in, so the HTTP launcher
-receives `404: Not Found`. Use the direct-copy instructions above. An authenticated
-cloud workspace downloading the file successfully does not prove an executor can
-download it. The full bundle starts without HTTP or `loadstring`.
+If you see `Chamber download failed`, `404`, or an error from the old one-line
+launcher, replace that launcher with the complete `loader.lua` above. For an error
+from the complete file, retain the full error text and executor name.
 
-The old download-based entry point is retained as [`http_loader.lua`](http_loader.lua)
-for publicly readable repositories only. It reports download, compilation, and
-startup errors separately and caches the bundle for optional teleport reload.
-It cannot download this private repository without GitHub authentication.
+## Performance
 
-### `Expected identifier ... got '404'`
+The previous version inspected every GUI object every frame, including while
+paused, and repeatedly rebuilt its object list. This version:
 
-The downloaded text was a GitHub error response, not the Lua script. A private
-repository returns 404 to requests without GitHub authentication; missing files
-and incorrect URLs can also return it. Sign into GitHub and copy the complete
-[`loader.lua`](loader.lua) source directly into the executor. If the error says
-`Chamber download failed`, the executor is still running the old HTTP downloader;
-replace the tab's contents with the new full script.
+- Does no discovery or automation work while Chamber is off, and disconnects its
+  GUI observers when turned off.
+- Builds an index incrementally, then follows GUI addition, removal, text, image,
+  name, and attribute events. Newly appearing prompts take priority over the
+  initial inventory of existing UI.
+- Budgets discovery to at most 96 work items per tick, with a 0.8 ms soft time
+  budget checked between items. A single Roblox API call can exceed that budget.
+- Samples cached prompt positions at up to 60 Hz; checks cached controls about
+  every 150 ms and refreshes status text every 400 ms. It skips unchanged UI values.
 
-### `:1: attempt to call a nil value`
+In an offline fixture containing 3,000 unrelated labels, 120 paused frames went
+from over 5 million GUI type checks to zero. During 120 active frames after
+initial discovery, the new scanner made 1,201 type checks and 120 candidate reads,
+with no full-tree enumeration. These are mock operation counts, not measured
+Roblox FPS. **Live performance and executor input acceptance still need an
+in-game check.**
 
-The old one-line launcher could produce this if `loadstring` was missing, or if
-compilation returned no function. The line number alone does not identify which
-call failed. Paste the full `loader.lua` bundle directly;
-the full bundle needs neither HTTP nor `loadstring` to start. If it still fails,
-share the full error and executor name. Ordinary Roblox LocalScripts do not
-provide the executor capabilities this application uses.
+## Automatic detection
 
-## Calibration
+Start, Respawn, Reconnect, and the HTC timer are identified from their visible
+text. The lines menu and hit rings also have layout-based detection. Prompts use
+labels, object names, input attributes, and automatically learned image/sprite
+signatures; old saved mappings remain readable for existing users. There is no
+binding page or calibration step.
 
-Click **BIND**, then hover the matching **game** control. After three seconds the
-app captures the UI object under the cursor and reopens its panel. It does not
-click the game during calibration. Use RESET to return a binding to automatic
-detection. Settings and bindings save to `DBFR_Lua/settings.json` in the executor's
-workspace when its file functions are available.
+The scanner cannot infer Q/E/left/right from an opaque image with no identifying
+metadata or known signature. Such a HUD needs a game-specific compatibility
+update; removing calibration does not give the script image recognition. It
+also cannot read timer or counter digits drawn entirely inside images. Unknown
+prompts are not assigned arbitrary inputs.
 
-- Bind the **left mouse, right mouse, Q, and E prompts** if their icons use unnamed
-  images. A binding matches the image and sprite rectangle, or the exact label
-  text, across new copies of that prompt. Choose the actual icon or label.
-- Bind **both hit rings** for continuous training presence between notes.
-- Bind the **lines menu**, its **Respawn entry**, and the **confirmation button**
-  separately. Open each menu yourself while paused to expose its control.
-- Bind the **HTC timer** to its numeric `H:MM:SS` text label. Bind challenge numbers
-  to their numeric labels if automatic lane detection misses them.
-- Start and Reconnect support explicit bindings if their labels differ.
-
-Controls resolve again when the game recreates its UI. Ambiguous paths with
-identically named siblings are rejected. Prompt images use signatures rather
-than paths because individual notes are frequently destroyed and recreated.
-
-The automatic layout uses the original 1280×720 reference, scaled to Roblox's
-viewport. Both rhythm lanes and the bottom-right timer retain that layout.
-This in-client edition follows the Roblox window; it has no desktop monitor
-selection. Non-16:9 layouts and significantly different game HUDs need additional
-layout adaptation. Binding targets changes their hit position but does not move
-the automatic lane search regions.
+Automatic layout uses the original 1280×720 reference scaled to the Roblox
+viewport, including both rhythm lanes and the bottom-right timer. Non-16:9
+layouts or substantially changed HUDs may need layout adaptation. The Lua version
+follows the Roblox window and has no desktop monitor selection.
 
 ## Automation
 
-- **Rhythm:** measures moving GUI prompts, predicts their arrival at a hit ring,
-  and sends left/right mouse or Q/E input. Default offset: −40 ms; hold: 38 ms.
-  Stationary icons and single observations do not trigger presses.
-- **25-press challenge:** remembers the nearest identified prompt, locks that
-  button, and pulses until the numeric counter reaches zero on three observations
-  or disappears on four. `10` and `20` are not zero. Defaults are 20 ms held and
-  20 ms released, with a cap of 125 attempts. Roblox's frame scheduling and the
-  executor affect the actual rate; an attempt does not prove the game counted it.
-- **Recovery:** pauses after two seconds without training UI, becomes eligible
-  after eight seconds, then clicks **lines menu → Respawn → confirmation**. It
-  waits at least eight seconds, requires a living character and three ready
-  samples, and sends a fresh Start before accepting training again. A Start button
-  that remains visible during respawn cannot skip the wait.
-- **HTC timer:** verifies two plausible readings, extrapolates between reads, and
-  enters AFK at 35 minutes remaining by default. Set the threshold to 0 to disable
-  that behavior. A missing timer remains unknown; there is no guessed session
-  duration. Once verified, the countdown survives a normal respawn.
-- **Reconnect:** checks throughout active training, startup, recovery, and AFK,
-  every two seconds. Two observations confirm the button. It approaches smoothly,
-  hovers, and clicks, with three attempts and a nine-second cooldown measured
-  after each click. After the hub returns, it waits seven seconds and starts
-  training again. Retry counts reset for future disconnects. A real Reconnect
-  attempt clears the old HTC reading; the new hub reading survives training startup.
-- **Pause / preview:** F6 pauses all automatic actions. Preview mode detects UI
-  without dispatching input. Errors stop automation and appear in Activity.
+- **Rhythm:** predicts when moving prompts reach the hit rings and sends
+  left/right mouse or Q/E input. Default timing offset is −40 ms with a 38 ms hold.
+  These are game inputs, not keyboard shortcuts for the hub.
+- **25-press challenge:** locks the nearest identified prompt and pulses until
+  the counter reaches zero on three observations or disappears on four. Defaults
+  are 20 ms held and 20 ms released, with a cap of 125 attempts. Frame scheduling
+  and the executor affect the actual rate; sending a press does not prove the
+  game counted it.
+- **Recovery:** detects missing training UI after two seconds, becomes eligible
+  after eight seconds, and clicks **lines menu → Respawn → confirmation**. It
+  waits at least eight seconds for respawn, requires a living character and three
+  ready samples, then sends a fresh Start before accepting training again.
+- **HTC timer:** verifies two plausible readings and extrapolates between reads.
+  At 35 minutes remaining by default, it enters AFK. Unknown timers are not given
+  a guessed duration. A verified countdown survives normal respawn.
+- **Reconnect:** watches throughout active training, recovery, startup, and AFK.
+  It checks every two seconds, confirms two observations, approaches smoothly,
+  hovers, and clicks. It allows three attempts with a nine-second cooldown after
+  each click, waits seven seconds after the hub returns, and starts again. Retry
+  counts reset for later disconnects. Reconnecting clears the old session timer.
+- **Off:** cancels pending actions, releases inputs, and stops discovery. Errors
+  stop Chamber and display a reason below its toggle. Additional details appear
+  in the executor console.
 
-The timing, recovery, reconnect, and AFK values are editable in Settings. Settings
-changes pause automation so an in-flight action cannot silently switch behavior.
-There is no anti-idle input: reaching the AFK threshold intentionally stops input
-and waits for the game to display Reconnect.
+Defaults live in `src/Config.lua`; previous configuration remains readable from
+`DBFR_Lua/settings.json` when executor file functions are available. There is no
+settings page. AFK intentionally stops input until Reconnect appears.
 
-## Executor compatibility and reconnect limits
+## Executor compatibility
 
-The adapter uses executor mouse/key functions when present and otherwise tries
-`VirtualInputManager`. Access restrictions stop the action with a visible error;
-the app does not treat sending an event as proof of success. Reconnect scanning
-needs access to its GUI, usually in CoreGui. An access failure is logged.
+Input uses executor mouse/key functions when available, otherwise
+`VirtualInputManager`. Restricted access can prevent those actions. Reconnect
+detection needs access to its GUI, usually in CoreGui. Ordinary Roblox
+LocalScripts do not provide all executor capabilities used by this application.
 
-Disconnecting may destroy the entire Lua session. No running script can keep
-clicking after its executor has stopped it. Optional **Reload after teleport**
-uses the executor's `queue_on_teleport` capability and a cached copy of the bundle.
-It depends on that executor reattaching; a disconnect/rejoin may not emit the
-same queue event as a normal teleport. Automatic re-execution cannot be verified
-offline and is not available in every executor.
-
-To enable reload without a public loader, place the bundle at
-`DBFR_Lua/chamber.lua` in the executor workspace. Enable the setting, then press
-POWER UP. The queued startup checks the saved run/reload settings, so pausing or
-unloading cancels automatic resume. Without queue/file support, load the script
-again after reconnecting. Each new instance continues using the saved bindings.
-
-This project reads exposed GUI objects. It does not include a screenshot/OCR
-engine for text drawn entirely inside images, nor does it invent game remote
-names. If the timer or countdown uses image glyphs rather than numeric text,
-that game-specific adapter still needs implementing from a GUI sample.
+A disconnect can destroy the Lua session. To reload automatically when supported,
+place the full bundle at `DBFR_Lua/chamber.lua` in the executor workspace and set
+`config.resumeAfterTeleport` to `true` in `DBFR_Lua/settings.json` before executing
+the script. Turning Chamber on then registers the executor's teleport queue.
+Pausing or unloading cancels the saved resume request. Queue, file, compiler,
+and executor reattachment support are required; a disconnect/rejoin may not
+trigger the same queue event as a normal teleport. Otherwise, execute the full
+script again after rejoining.
 
 ## Development
 
-The original Python repository is a separate project. This checkout contains:
+All application, build, and test source is Lua. The original Python application
+is a separate repository.
 
 | File | Purpose |
 | --- | --- |
 | `src/Engine.lua` | Training, recovery, AFK, and reconnect state machine |
 | `src/Rhythm.lua` | Note motion, input timing, and spam lifecycle |
-| `src/Bindings.lua` | Visible GUI discovery and saved calibration |
-| `src/Input.lua` | Smooth movement and cancellable input with release handling |
-| `src/UI.lua` | Native Roblox Dragon Ball dashboard |
-| `src/Main.lua` | Lifecycle, settings, hotkeys, and optional teleport reload |
+| `src/GuiIndex.lua` | Bounded discovery and GUI event subscriptions |
+| `src/Bindings.lua` | Automatic recognition and cached candidate sampling |
+| `src/Input.lua` | Smooth movement, cancellation, and input release |
+| `src/UI.lua` | Compact Dragon Ball hub and independent feature rows |
+| `src/Main.lua` | Chamber lifecycle, saved configuration, optional teleport reload |
 | `src/Timer.lua`, `src/Config.lua` | Countdown verification and validated defaults |
-| `loader.lua`, `dist/chamber.lua` | Identical self-contained executor bundles; no startup download |
+| `loader.lua`, `dist/chamber.lua` | Identical generated executor bundles |
 | `http_loader.lua` | Optional downloader for publicly readable repositories |
 
-From the repository root, with Lua 5.1+ or LuaJIT installed:
+From the repository root, with Lua 5.1+ or LuaJIT:
 
 ```sh
 lua tools/build.lua
 lua tests/run.lua
 ```
 
-The tests cover repeated reconnects, timer retention through more than three
-minutes of subsequent training, post-respawn Start gating, early and sustained
-spam, exact counter completion, button movement/cancellation/release, calibration,
-GUI visibility, dashboard actions, and unloading duplicate instances. The tests
-use deterministic Roblox doubles; they do not render Roblox or verify executor
-permissions or in-game timing.
+For a future feature, `ui:addFeature(id, title, onToggle)` adds its own button and
+status labels. Keep the feature's state, input handling, and cleanup independent
+of Chamber; adding a row does not start another scanning loop. Chamber currently
+registers one row in `Main.lua`. No keyboard binding is needed.
 
-The source uses the Lua 5.1-compatible subset of Luau. The shipped app uses Roblox
-services and therefore runs in Roblox, not in the desktop Lua interpreter used
-for the offline tests.
+The offline suite covers recovery order, post-respawn Start gating, repeated
+reconnects, timer retention, sustained spam, cancellation and release, automatic
+recognition, event-driven discovery, pause/unload cleanup, and large GUI fixtures.
+It uses deterministic Roblox API doubles and does not render Roblox or validate
+live executor permissions. The source uses the Lua 5.1-compatible subset of Luau;
+the shipped application runs inside Roblox.
