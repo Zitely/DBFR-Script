@@ -119,7 +119,7 @@ function M.object(class, name, parent, props)
         Visible = true, Enabled = true, AbsolutePosition = M.vector(0, 0), AbsoluteSize = M.vector(100, 30),
         ImageRectOffset = M.vector(0, 0), ImageRectSize = M.vector(0, 0), Image = "", Text = "",
         Activated = signal(), InputBegan = signal(), InputEnded = signal(), FocusLost = signal(),
-        DescendantAdded = signal(), DescendantRemoving = signal(), AttributeChanged = signal()}}, instance)
+        DescendantAdded = signal(), DescendantRemoving = signal(), AttributeChanged = signal(), OnClientEvent = signal()}}, instance)
     for key, value in pairs(props or {}) do object[key] = value end
     object.Parent = parent
     return object
@@ -156,6 +156,7 @@ function M.reset()
     M.humanoid = M.object("Humanoid", "Humanoid", M.character, {Health = 100})
     M.player.Character = M.character
     M.coreGui = M.object("CoreGui", "CoreGui", game)
+    M.replicatedStorage = M.object("ReplicatedStorage", "ReplicatedStorage", game)
     M.hud = M.object("ScreenGui", "HUD", M.playerGui, {IgnoreGuiInset = true})
     M.uis = {InputBegan = signal(), InputChanged = signal(), InputEnded = signal(), cursor = M.vector(80, 200)}
     function M.uis:GetMouseLocation() return self.cursor end
@@ -169,7 +170,7 @@ function M.reset()
     M.http = {}
     function M.http:JSONEncode(value) encoded[#encoded + 1] = value; return "JSON" .. #encoded end
     function M.http:JSONDecode(value) return assert(encoded[tonumber(tostring(value):match("JSON(%d+)"))]) end
-    M.services = {Players = {LocalPlayer = M.player}, CoreGui = M.coreGui, UserInputService = M.uis,
+    M.services = {Players = {LocalPlayer = M.player}, CoreGui = M.coreGui, ReplicatedStorage = M.replicatedStorage, UserInputService = M.uis,
         RunService = M.runService, VirtualInputManager = M.vim, HttpService = M.http,
         GuiService = {GetGuiInset = function() return M.vector(0, 36) end}}
     game.GetService = function(_, name) return assert(M.services[name], "Missing mock service " .. name) end

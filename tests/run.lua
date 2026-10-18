@@ -58,6 +58,28 @@ test("Start overrides false training and requires three fresh samples", function
     e:step({training = true}, 3.2); equal(e.state, "training")
     equal(e:canPlay({training = true}), true)
 end)
+test("enabling during a recognized minigame adopts it without another Start", function()
+    local e = engine()
+    local s = {training = true, alive = true, notes = {{kind = "q"}}}
+    e:step(s, 0.1); e:step(s, 0.2)
+    equal(e.state, "seeking"); equal(e:canPlay(s), false)
+    e:step(s, 0.3)
+    equal(e.state, "training"); equal(e.requiresStart, false)
+    equal(e:canPlay(s), true)
+end)
+test("adoption needs live prompts and does not bypass a visible Start or respawn", function()
+    local e = engine()
+    for i = 1, 3 do e:step({training = true, alive = true, notes = {}}, i * 0.1) end
+    equal(e.state, "seeking"); equal(e.requiresStart, true)
+    for i = 4, 6 do e:step({training = true, alive = false, notes = {{kind = "q"}}}, i * 0.1) end
+    equal(e.state, "seeking")
+    local action = e:step({start = true, training = true, alive = true, notes = {{kind = "q"}}}, 0.7)
+    equal(action.kind, "start")
+    e:complete(action, true, 1)
+    e.state, e.since, e.readyAfter, e.requiresStart = "respawning", 1, 9, true
+    for i = 2, 12 do e:step({training = true, alive = true, notes = {{kind = "q"}}}, i) end
+    equal(e.state, "respawning"); equal(e:canPlay({}), false)
+end)
 test("respawn uses menu, entry, confirmation, character wait, then a fresh Start", function()
     local e = engine()
     enterTraining(e)
@@ -241,6 +263,7 @@ local mock = require("tests.roblox_mock")
 mock.install()
 require("tests.integration")(test, equal, mock)
 require("tests.performance")(test, equal, mock)
+require("tests.capture")(test, equal, mock)
 
 print(string.format("\n%d tests passed; %d failed", passed, failed))
 assert(failed == 0, "Test suite failed")

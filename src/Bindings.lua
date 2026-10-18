@@ -307,9 +307,11 @@ function Bindings:snapshot(now)
     end
     local character = self.player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local ready = true
+    -- Recovery should not wait for the random sequence to show all four keys.
+    -- Keep the guard for a HUD where no prompt has ever been understood.
+    local ready = next(self.detectedKinds) ~= nil
     for _, kind in ipairs(KINDS) do
-        if not self.detectedKinds[kind] and not self.saved[kind] then ready = false end
+        if self.saved[kind] then ready = true end
     end
     return {start = controls.start ~= nil, menu = controls.menu ~= nil, respawn = controls.respawn ~= nil,
         confirm = controls.confirm ~= nil, reconnect = controls.reconnect ~= nil,

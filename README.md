@@ -1,10 +1,11 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.1.1 has one Chamber toggle,
+orange and gold Dragon Ball themed hub. **Version 1.1.2 has one Chamber toggle,
 a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
-No manual calibration is needed. The hub supports additional feature rows as
-the project grows.
+The hub supports additional feature rows as the project grows. Detection is
+automatic, but the current game HUD still needs a compatibility update when
+its prompt names or images are not recognized; see the capture instructions below.
 
 ## Run
 
@@ -25,6 +26,10 @@ to pause, or × to exit. Execute the full script again to reopen after exiting.
 The panel displays the current action and bottom-right HTC timer. Fresh execution
 starts with Chamber off. Running the script again unloads its previous instance,
 releases held inputs, and disconnects the old loop before creating the new panel.
+Turning Chamber on during an existing minigame can now adopt it after three
+observations of recognized prompts with a living character and no Start button.
+Recovery still waits for a fresh Start after respawn. Recovery no longer requires
+all four prompt types to appear first; at least one must have been recognized.
 
 `loader.lua` and `dist/chamber.lua` are identical, self-contained programs. Their
 first line is:
@@ -71,6 +76,34 @@ text. The lines menu and hit rings also have layout-based detection. Prompts use
 labels, object names, input attributes, and automatically learned image/sprite
 signatures; old saved mappings remain readable for existing users. There is no
 binding page or calibration step.
+
+### Capture an unrecognized minigame
+
+If the status says `Chamber prompts were not recognized automatically`, use the
+optional **[`dist/capture_minigame.lua`](dist/capture_minigame.lua)** to collect the
+actual game UI details. This is a separate read-only diagnostic, not the autoplay
+program. Copy the entire file while signed into GitHub and run it in the executor.
+
+1. Turn Chamber **OFF** and execute the capture script.
+2. During its **30-second recording**, manually press Start and play a round.
+   Also open the lines menu and Respawn dialog to expose their controls.
+3. When the console says `[Chamber Capture] Done`, share
+   **`DBFR_Lua/minigame_capture.json`** from your executor's workspace. If clipboard
+   access is available, the same report is copied there. Without file or clipboard
+   support, the report prints in the console and is available as
+   `getgenv().__DBFR_CAPTURE_RESULT`.
+
+The report records incoming `ReplicatedStorage.Minigame.OnClientEvent` arguments,
+their times, and GUI paths, labels, image assets, attributes, and positions under
+the `Main`, `MainFrame`, `Menu`, and `Timer` roots shown in Dark Dex. It does not
+send inputs, fire remotes, replay signals, or hook game methods. Discovery is
+spread across frames; collection is capped and any truncation is recorded.
+All listeners disconnect when recording ends or the capture is rerun. If needed,
+`getgenv().__DBFR_CAPTURE.stop()` ends recording early and exports the report.
+
+The supplied Cobalt sample contained four `{2, 0.3}` pairs in an incoming event.
+Their meanings are not established. No mapping of `2` to a key or `0.3` to input
+timing has been added; the capture is intended to establish that relationship.
 
 The scanner cannot infer Q/E/left/right from an opaque image with no identifying
 metadata or known signature. Such a HUD needs a game-specific compatibility
@@ -143,6 +176,7 @@ is a separate repository.
 | `src/Input.lua` | Smooth movement, cancellation, and input release |
 | `src/UI.lua` | Compact Dragon Ball hub and independent feature rows |
 | `src/Main.lua` | Chamber lifecycle, saved configuration, optional teleport reload |
+| `src/Capture.lua`, `dist/capture_minigame.lua` | Optional read-only diagnostic and its standalone bundle |
 | `src/Timer.lua`, `src/Config.lua` | Countdown verification and validated defaults |
 | `loader.lua`, `dist/chamber.lua` | Identical generated executor bundles |
 | `http_loader.lua` | Optional downloader for publicly readable repositories |

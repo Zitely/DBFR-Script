@@ -20,6 +20,7 @@ function Engine:setActive(enabled, now)
     if enabled then
         self.startCount, self.recoveryCount, self.reconnectCount = 0, 0, 0
         self.requiresStart, self.nextStart = true, now
+        self.mayAdopt = true
         self:transition("seeking", now, "Looking for the training Start button")
     else self:transition("paused", now, "Automation paused") end
 end
@@ -43,18 +44,20 @@ function Engine:complete(action, ok, now, reason)
     end
     if action.kind == "start" then
         self.startCount = self.startCount + 1
-        self.requiresStart, self.fresh = false, 0
+        self.requiresStart, self.fresh, self.mayAdopt = false, 0, false
         self.nextStart = now + self.config.startGrace
         self:transition("starting", now, "Start pressed; waiting for fresh training UI")
     elseif action.kind == "menu" then
+        self.mayAdopt = false
         self:transition("respawn_menu", now, "Waiting for the menu's Respawn entry")
     elseif action.kind == "respawn" then
         self:transition("respawn_confirm", now, "Waiting for the Respawn confirmation")
     elseif action.kind == "confirm" then
-        self.requiresStart, self.fresh = true, 0
+        self.requiresStart, self.fresh, self.mayAdopt = true, 0, false
         self:transition("respawning", now, "Waiting for your character to respawn")
         self.readyAfter = now + self.config.respawnWait
     elseif action.kind == "reconnect" then
+        self.mayAdopt = false
         self.reconnectCount = self.reconnectCount + 1
         self.timer:reset()
         self.nextReconnect = now + self.config.reconnectCooldown
@@ -133,7 +136,7 @@ function Engine:step(s, now)
     end
     -- Start is authoritative even when scenery or old targets resemble training.
     if s.start then
-        self.fresh = 0
+        self.fresh, self.mayAdopt = 0, false
         if c.autoStart and not c.dryRun and now >= (self.nextStart or 0) then
             if self.startCount >= c.startAttempts then
                 self:halt(now, "Start retry limit reached; check the game screen")
@@ -141,9 +144,13 @@ function Engine:step(s, now)
         end
         return nil
     end
-    if s.training and not self.requiresStart then
+    -- A fresh toggle can join an existing minigame. Recovery/reconnect still
+    -- require a new Start; stationary hit rings alone cannot authorize adoption.
+    local adopt = self.mayAdopt and self.state == "seeking" and s.alive and #(s.notes or {}) > 0
+    if s.training and (not self.requiresStart or adopt) then
         self.fresh = self.fresh + 1
         if self.fresh >= 3 then
+            self.requiresStart, self.mayAdopt = false, false
             self.lastTraining = now
             if self.state ~= "training" then
                 self.sessions = self.sessions + 1
