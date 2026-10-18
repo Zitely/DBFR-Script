@@ -17,6 +17,12 @@ end
 if type(source) ~= "string" or source:match("^%s*$") then
     error("Chamber download failed: the response was not a nonempty script.", 0)
 end
+if source:match("^%s*404") then
+    error("Chamber download failed: GitHub returned 404. A private repository cannot be downloaded by this unauthenticated loader. While signed into GitHub, open dist/chamber.lua, copy the complete raw file, and paste it directly into your executor. A missing file or incorrect URL can also cause 404.", 0)
+end
+if source:match("^%s*<") then
+    error("Chamber download failed: the server returned an HTML page instead of Lua. Copy the complete dist/chamber.lua file from GitHub while signed in and paste it directly into your executor.", 0)
+end
 local compiled, chunk, compileError = pcall(compile, source, "DBFR Chamber")
 if not compiled then
     error("Chamber compilation failed: " .. tostring(chunk), 0)

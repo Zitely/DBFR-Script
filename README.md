@@ -12,9 +12,10 @@ live input acceptance still need an initial in-game check.
 
 ## Run
 
-1. Open **[`dist/chamber.lua`](dist/chamber.lua)**, copy its complete contents, and
-   execute it in your Roblox executor. This single file contains the whole app;
-   no downloaded UI library or Python installation is needed.
+1. **Sign into GitHub**, open **[`dist/chamber.lua`](dist/chamber.lua)**, and use
+   **Copy raw file** to copy its complete contents. Paste the actual Lua code into
+   your executor and execute it. This works with a private repository. The single
+   file contains the whole app; no downloaded UI library or Python is needed.
 2. Open **Calibration**. Start, Respawn, Reconnect, and the bottom-right timer are
    found by visible text when possible. Bind unidentified controls as described below.
 3. Press **POWER UP** or **F6**. The window collapses to a small badge, leaving the
@@ -31,7 +32,14 @@ live input acceptance still need an initial in-game check.
 Start with the game at its training hub. Automation starts paused on each fresh
 execution. Re-executing the script unloads the previous instance first.
 
-The optional [`loader.lua`](loader.lua) downloads the bundle from
+**Private repository:** GitHub currently marks `Zitely/DBFR-Script` as private.
+Your executor does not inherit your browser's GitHub sign-in, so the HTTP launcher
+receives `404: Not Found`. Use the direct-copy instructions above. An authenticated
+cloud workspace downloading the file successfully does not prove an executor can
+download it. The full bundle starts without HTTP or `loadstring`.
+
+The optional [`loader.lua`](loader.lua) requires a publicly readable repository URL.
+If the repository is deliberately made public later, it downloads the bundle from
 [`Zitely/DBFR-Script`](https://github.com/Zitely/DBFR-Script) and caches a copy for
 optional teleport reload. Paste its **complete contents** into your executor to
 get separate download, compilation, and startup errors. The short launcher below
@@ -45,6 +53,8 @@ local ok, source = pcall(function()
     return game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/loader.lua")
 end)
 assert(ok, "Loader download failed: " .. tostring(source))
+assert(type(source) == "string" and not source:match("^%s*404"),
+    "GitHub returned 404. Sign into GitHub and copy the complete dist/chamber.lua file instead.")
 local run, reason = compile(source, "Chamber launcher")
 assert(type(run) == "function", "Loader compilation failed: " .. tostring(reason))
 run()
@@ -52,6 +62,14 @@ run()
 
 The loader requires a publicly readable raw URL and executor HTTP support. If
 either is unavailable, paste the complete `dist/chamber.lua` file instead.
+
+### `Expected identifier ... got '404'`
+
+The downloaded text was a GitHub error response, not the Lua script. A private
+repository returns 404 to requests without GitHub authentication; missing files
+and incorrect URLs can also return it. Sign into GitHub and copy the complete
+[`dist/chamber.lua`](dist/chamber.lua) source directly into the executor. The
+updated loader recognizes 404 and HTML responses before attempting compilation.
 
 ### `:1: attempt to call a nil value`
 

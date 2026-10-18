@@ -9,7 +9,7 @@ return function(test, equal)
     end
     local function run(options)
         options = options or {}
-        local sandbox, capabilities, saved, requests = {}, {}, {}, {}
+        local sandbox, capabilities, saved, requests, compiledSources = {}, {}, {}, {}, {}
         sandbox._G = sandbox
         sandbox.getgenv = options.getgenv or function() return capabilities end
         sandbox.game = {HttpGet = function(_, url)
@@ -20,6 +20,7 @@ return function(test, equal)
         capabilities.makefolder = function() end
         capabilities.writefile = function(path, contents) saved[path] = contents end
         local compiler = function(source, name)
+            compiledSources[#compiledSources + 1] = source
             return compileIn(source, name, sandbox)
         end
         if options.envCompiler then capabilities.loadstring = compiler end
@@ -35,7 +36,7 @@ return function(test, equal)
         file:close()
         local loader = assert(compileIn(source, "@loader.lua", sandbox))
         local ok, result = pcall(loader)
-        return ok, result, requests, saved
+        return ok, result, requests, saved, compiledSources
     end
     test("loader reports absent loadstring before downloading", function()
         local ok, reason, requests = run({noCompiler = true})
@@ -52,9 +53,20 @@ return function(test, equal)
         assert(reason:find("HTTP unavailable", 1, true))
     end)
     test("loader reports compilation errors instead of calling nil", function()
-        local ok, reason, _, saved = run({source = "<html>not Lua</html>"})
+        local ok, reason, _, saved = run({source = "local = broken Lua"})
         equal(ok, false); assert(reason:find("Chamber compilation failed:", 1, true))
         equal(next(saved), nil)
+    end)
+    test("loader explains GitHub 404 without compiling or caching its body", function()
+        local ok, reason, _, saved, compiled = run({source = "  404: Not Found\n"})
+        equal(ok, false); assert(reason:find("GitHub returned 404", 1, true))
+        assert(reason:find("private repository", 1, true))
+        equal(#compiled, 0); equal(next(saved), nil)
+    end)
+    test("loader rejects an HTML login or error page before compilation", function()
+        local ok, reason, _, saved, compiled = run({source = "\n<!DOCTYPE html><html>Sign in</html>"})
+        equal(ok, false); assert(reason:find("HTML page instead of Lua", 1, true))
+        equal(#compiled, 0); equal(next(saved), nil)
     end)
     test("loader rejects empty or non-string HTTP responses", function()
         for _, source in ipairs({"   ", {Body = "wrong HTTP API"}}) do
