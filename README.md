@@ -1,9 +1,10 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.1.0 has one Chamber toggle,
-no keyboard shortcuts, and no manual calibration.** The hub supports additional
-feature rows as the project grows.
+orange and gold Dragon Ball themed hub. **Version 1.1.1 has one Chamber toggle,
+a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
+No manual calibration is needed. The hub supports additional feature rows as
+the project grows.
 
 ## Run
 
@@ -11,6 +12,15 @@ feature rows as the project grows.
 2. Replace the **entire contents** of your executor tab with that code and execute it.
 3. At the game's training hub, click **CHAMBER AUTO TRAIN** to turn automation on.
    Click the same button again to stop. Drag the header to move the panel.
+
+| Window control | Action |
+| --- | --- |
+| Right Shift | Hide the hub or bring it back expanded; ignored while typing in a text box |
+| Top-right − / + | Minimize to the header / restore the feature rows |
+| Top-right × | Stop automation, release inputs, and completely unload the hub |
+
+Hiding or minimizing keeps Chamber running if it is on. Use its feature toggle
+to pause, or × to exit. Execute the full script again to reopen after exiting.
 
 The panel displays the current action and bottom-right HTC timer. Fresh execution
 starts with Chamber off. Running the script again unloads its previous instance,

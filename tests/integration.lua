@@ -121,10 +121,10 @@ return function(test, equal, mock)
         equal(next(input.held), nil)
         assert(mock.now >= 2.6)
     end)
-    test("one feature toggle starts and stops without keyboard shortcuts", function()
+    test("Chamber button controls automation independently of window shortcuts", function()
         mock.reset()
         local app = require("src.Main").start()
-        equal(app.version, "1.1.0"); equal(#app.ui.order, 1)
+        equal(app.version, "1.1.1"); equal(#app.ui.order, 1)
         local row = app.ui.features.chamber
         equal(row.state.Text, "PAUSED")
         mock.uis.InputBegan:Fire({KeyCode = Enum.KeyCode.F6}, false)
@@ -133,10 +133,56 @@ return function(test, equal, mock)
         mock.tick(0.25); equal(row.state.Text, "SEEKING")
         mock.uis.InputBegan:Fire({KeyCode = Enum.KeyCode.F7}, false)
         mock.tick(0.25); equal(row.state.Text, "SEEKING")
+        app.ui.minimizeButton.Activated:Fire()
+        equal(row.row.Visible, false); equal(app.ui.window.Size.Y.Offset, 65)
+        mock.tick(0.4); equal(row.state.Text, "SEEKING")
+        equal(row.row.Visible, false)
+        mock.uis.InputBegan:Fire({KeyCode = Enum.KeyCode.RightShift}, false)
+        equal(app.ui.window.Visible, false)
+        mock.tick(0.4); equal(row.state.Text, "SEEKING")
+        mock.uis.InputBegan:Fire({KeyCode = Enum.KeyCode.RightShift}, false)
+        equal(app.ui.window.Visible, true); equal(row.row.Visible, true)
+        equal(app.ui.minimized, false)
         row.button.Activated:Fire(); equal(row.state.Text, "PAUSED")
         equal(app.ui.window.Visible, true)
         app.unload(); equal(mock.env.__DBFR_APP, nil); equal(app.ui.gui.Parent, nil)
         for _, connection in ipairs(mock.runService.Heartbeat.listeners) do equal(connection.Connected, false) end
+    end)
+    test("visibility shortcut ignores processed input and focused text fields", function()
+        mock.reset()
+        local app = require("src.Main").start()
+        local key = {KeyCode = Enum.KeyCode.RightShift}
+        mock.uis.InputBegan:Fire(key, true); equal(app.ui.window.Visible, true)
+        mock.uis.GetFocusedTextBox = function() return {} end
+        mock.uis.InputBegan:Fire(key, false); equal(app.ui.window.Visible, true)
+        mock.uis.GetFocusedTextBox = function() return nil end
+        mock.uis.InputBegan:Fire(key, false); equal(app.ui.window.Visible, false)
+        equal(app.ui.features.chamber.state.Text, "PAUSED")
+        app.unload()
+    end)
+    test("exit during a held click releases input and disconnects the application", function()
+        mock.reset()
+        mock.object("TextButton", "Start", mock.hud, {Text = "Start",
+            AbsolutePosition = Vector2.new(600, 100), AbsoluteSize = Vector2.new(80, 30)})
+        local app = require("src.Main").start()
+        app.toggle()
+        mock.waitHook = function()
+            if mock.now > 1.12 and app.ui.gui.Parent then app.ui.closeButton.Activated:Fire() end
+        end
+        mock.tick(0.01)
+        equal(mock.env.__DBFR_APP, nil); equal(app.ui.gui.Parent, nil)
+        local down, lastMouse = false, nil
+        for _, event in ipairs(mock.vim.events) do
+            if event[1] == "mouse" then down = down or event[3]; lastMouse = event end
+        end
+        assert(down, "Exit should interrupt an actual held click")
+        equal(lastMouse[3], false)
+        for _, signal in ipairs({mock.runService.Heartbeat, mock.uis.InputBegan,
+            mock.uis.InputChanged, mock.uis.InputEnded, mock.playerGui.DescendantAdded}) do
+            for _, c in ipairs(signal.listeners) do equal(c.Connected, false) end
+        end
+        mock.resetMetrics()
+        mock.tick(); equal(mock.metrics.typeChecks, 0); equal(mock.metrics.childrenReads, 0)
     end)
     test("running the bundle twice replaces the previous UI without duplicate loops", function()
         mock.reset()
@@ -145,6 +191,9 @@ return function(test, equal, mock)
         equal(first.ui.gui.Parent, nil); assert(second.ui.gui.Parent)
         local connected = 0
         for _, c in ipairs(mock.runService.Heartbeat.listeners) do if c.Connected then connected = connected + 1 end end
+        equal(connected, 1)
+        connected = 0
+        for _, c in ipairs(mock.uis.InputBegan.listeners) do if c.Connected then connected = connected + 1 end end
         equal(connected, 1); second.unload()
     end)
     test("root loader starts the dashboard without HTTP or loadstring", function()
@@ -159,7 +208,7 @@ return function(test, equal, mock)
         local ok, app = pcall(function() return assert(loadfile("loader.lua"))() end)
         loadstring = compile
         assert(ok, app)
-        equal(app.version, "1.1.0"); equal(app.ui.window.Visible, true)
+        equal(app.version, "1.1.1"); equal(app.ui.window.Visible, true)
         equal(downloads, 0)
         mock.tick(); equal(app.ui.features.chamber.state.Text, "PAUSED")
         app.unload()
@@ -168,10 +217,15 @@ return function(test, equal, mock)
         mock.reset()
         local app = require("src.Main").start()
         local called = 0
+        app.ui.minimizeButton.Activated:Fire()
         local extra = app.ui:addFeature("example", "EXAMPLE", function() called = called + 1 end)
+        equal(extra.row.Visible, false); equal(app.ui.window.Size.Y.Offset, 65)
+        app.ui.minimizeButton.Activated:Fire()
+        equal(extra.row.Visible, true); equal(app.ui.features.chamber.row.Visible, true)
+        equal(app.ui.window.Size.Y.Offset, 336)
         extra.button.Activated:Fire(); equal(called, 1)
         equal(app.ui.features.chamber.state.Text, "PAUSED")
-        equal(#app.ui.order, 2); equal(#mock.uis.InputBegan.listeners, 0)
+        equal(#app.ui.order, 2); equal(#mock.uis.InputBegan.listeners, 1)
         app.unload()
     end)
     test("teleport reload queues once and pause revokes the saved resume request", function()
