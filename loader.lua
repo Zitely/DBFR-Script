@@ -1,5 +1,5 @@
--- Run this after the repository has been published, or paste dist/chamber.lua directly.
-local url = "https://raw.githubusercontent.com/Zitely/Roblox-DBFR-Lua/main/dist/chamber.lua"
+-- Downloads and caches the self-contained bundle; alternatively paste dist/chamber.lua.
+local url = "https://raw.githubusercontent.com/Zitely/DBFR-Script/main/dist/chamber.lua"
 local source = game:HttpGet(url)
 local chunk = assert(loadstring(source, "DBFR Chamber"))
 local env = type(getgenv) == "function" and getgenv() or _G

@@ -1,4 +1,4 @@
-# CHAMBER · Saiyan Control
+# DBFR-Script · CHAMBER / Saiyan Control
 
 A separate Lua/Luau edition of the DBFR Chamber training helper, built for a Roblox
 script executor. The interface uses an orange and gold Dragon Ball theme, seven
@@ -32,10 +32,15 @@ Start with the game at its training hub. Automation starts paused on each fresh
 execution. Re-executing the script unloads the previous instance first.
 
 The optional [`loader.lua`](loader.lua) downloads the bundle from
-`Zitely/Roblox-DBFR-Lua`. **It only works after that repository and file have been
-published and the raw URL is publicly readable.** Private repositories require
-pasting the bundle or loading a local copy. Directly pasting the bundle works
-without publishing anything.
+[`Zitely/DBFR-Script`](https://github.com/Zitely/DBFR-Script) and caches a copy for
+optional teleport reload. Run it with:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/loader.lua"))()
+```
+
+The loader requires a publicly readable raw URL and executor HTTP support. If
+either is unavailable, paste the complete `dist/chamber.lua` file instead.
 
 ## Calibration
 
