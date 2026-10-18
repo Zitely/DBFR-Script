@@ -125,13 +125,35 @@ function Engine:step(s, now)
     elseif self.state == "respawning" then
         if now - self.since > c.respawnTimeout then
             self:halt(now, "Respawn loading timed out")
-        elseif now >= self.readyAfter and s.alive and s.start and not s.confirm then
+        elseif now >= self.readyAfter and s.alive and s.start and not s.confirm and s.startAllowed ~= false then
             self.fresh = self.fresh + 1
             if self.fresh >= 3 then
                 self.startCount, self.nextStart, self.fresh = 0, now, 0
                 self:transition("seeking", now, "Respawn finished; starting training again")
             end
         else self.fresh = 0 end
+        return nil
+    end
+    -- The game's health gate is independent of whether icon names are known.
+    -- Handle it before a still-visible Start can consume the retry budget.
+    if s.trainingKnown and s.needsRecovery then
+        self.fresh = 0
+        if not c.autoRecover or c.dryRun then self.status = s.startBlocked; return nil end
+        if self.recoveryCount >= c.recoveryAttempts then
+            self:halt(now, "Recovery retry limit reached")
+        elseif s.menu then
+            self.recoveryCount = self.recoveryCount + 1
+            self.requiresStart = true
+            return self:action("menu", now)
+        else
+            if self.state ~= "lost" then self:transition("lost", now, "Health too low; looking for the lines menu") end
+            if now - self.since > 4 then self:halt(now, "Lines menu was not recognized; Chamber paused") end
+        end
+        return nil
+    end
+    if s.trainingKnown and (s.alive == false or (not s.gameActive and s.startAllowed == false)) then
+        self.status = s.startBlocked or "Waiting for the game to allow training"
+        self.fresh = 0
         return nil
     end
     -- Start is authoritative even when scenery or old targets resemble training.
@@ -146,17 +168,21 @@ function Engine:step(s, now)
     end
     -- A fresh toggle can join an existing minigame. Recovery/reconnect still
     -- require a new Start; stationary hit rings alone cannot authorize adoption.
-    local adopt = self.mayAdopt and self.state == "seeking" and s.alive and #(s.notes or {}) > 0
+    local adopt = self.mayAdopt and self.state == "seeking" and s.alive
+        and (s.trainingKnown or #(s.notes or {}) > 0)
     if s.training and (not self.requiresStart or adopt) then
         self.fresh = self.fresh + 1
         if self.fresh >= 3 then
             self.requiresStart, self.mayAdopt = false, false
             self.lastTraining = now
+            local message = s.trainingKnown and not s.bindingsReady
+                and "Training detected; waiting for prompt recognition" or "Training active — ki flowing"
             if self.state ~= "training" then
                 self.sessions = self.sessions + 1
-                self.startCount, self.recoveryCount, self.reconnectCount = 0, 0, 0
-                self:transition("training", now, "Training active — ki flowing")
-            end
+                self.startCount, self.reconnectCount = 0, 0
+                if not s.trainingKnown or s.bindingsReady then self.recoveryCount = 0 end
+                self:transition("training", now, message)
+            else self.status = message end
         end
     else self.fresh = 0 end
     if self.state == "training" and not s.training and now - (self.lastTraining or now) >= 2 then
@@ -166,7 +192,7 @@ function Engine:step(s, now)
     local missing = self.state == "lost" and now - (self.lastTraining or now) >= c.lostSeconds
     local stalled = (self.state == "seeking" or self.state == "starting") and now - self.since >= grace
     if (missing or stalled) and c.autoRecover and not c.dryRun then
-        if not s.bindingsReady then
+        if not s.bindingsReady and not s.trainingKnown then
             self:halt(now, "Chamber prompts were not recognized automatically; game compatibility needs an update")
         elseif self.recoveryCount >= c.recoveryAttempts then
             self:halt(now, "Recovery retry limit reached")
@@ -181,5 +207,6 @@ end
 function Engine:canPlay(snapshot)
     return self.active and self.state == "training" and not self.pending and not self.modalCandidate
         and not snapshot.start and not self.config.dryRun
+        and (not snapshot.trainingKnown or snapshot.training)
 end
 return Engine

@@ -23,6 +23,19 @@ function Input:move(x, y)
     elseif self.vim then self.vim:SendMouseMoveEvent(x, y, game)
     else error("Executor does not provide mouse movement") end
 end
+function Input:park(window)
+    local camera = workspace.CurrentCamera
+    local size = camera and camera.ViewportSize or Vector2.new(1280, 720)
+    for _, point in ipairs({Vector2.new(size.X * 90 / 1280, size.Y * 435 / 720),
+        Vector2.new(size.X * 0.5, size.Y * 0.5), Vector2.new(size.X * 0.9, size.Y * 0.5)}) do
+        local p, s = window.AbsolutePosition, window.AbsoluteSize
+        if not window.Visible or point.X < p.X or point.X > p.X + s.X
+            or point.Y < p.Y or point.Y > p.Y + s.Y then
+            self:move(point.X, point.Y)
+            return
+        end
+    end
+end
 function Input:event(kind, down)
     if kind == "left" or kind == "right" then
         if self.nativeMouse then

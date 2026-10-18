@@ -16,6 +16,7 @@ end
 function Rhythm:reset()
     self:release()
     self.tracks, self.spam, self.done, self.clear, self.zero = {}, nil, nil, 0, 0
+    self.challengeId = nil
     self.releaseAt, self.nextPulse = nil, nil
 end
 function Rhythm:press(kinds, now, hold)
@@ -33,6 +34,11 @@ function Rhythm:step(notes, challenge, now)
         self.nextPulse = now + self.config.spamGapMs / 1000
     end
     local visible = challenge and challenge.visible and challenge.kind
+    if visible and challenge.id and challenge.id ~= self.challengeId then
+        -- Consecutive mash notes need not leave four empty samples between them.
+        self:reset()
+        self.challengeId = challenge.id
+    end
     if self.done then
         self.clear = visible and 0 or self.clear + 1
         if self.clear >= 4 then self.done, self.clear = nil, 0 end
@@ -61,31 +67,62 @@ function Rhythm:step(notes, challenge, now)
         self.bursts = self.bursts + 1
         return self:step(notes, challenge, now)
     end
-    local due, seen = {}, {}
+    local due, seen, pending, pair = {}, {}, {}, nil
     for _, n in ipairs(notes or {}) do
         seen[n.id] = true
         local t = self.tracks[n.id]
-        if not t or n.x < t.x - 50 or n.kind ~= t.kind then
-            t = {x = n.x, at = now, kind = n.kind, observed = 0, first = now}
-            self.tracks[n.id] = t
-        end
-        local elapsed = now - t.at
-        if elapsed > 0 then
-            local speed = (n.x - t.x) / elapsed
-            if speed > 60 and speed < 900 then t.speed = t.speed and t.speed * 0.3 + speed * 0.7 or speed end
-            t.observed = t.observed + 1
-        end
-        t.x, t.at = n.x, now
-        if t.speed and t.observed >= 2 and now - t.first >= 0.03 and not t.fired then
-            local eta = ((n.target or 1025) - n.x) / t.speed + self.config.timingOffsetMs / 1000
-            if eta <= 0 and eta > -0.15 and not self.releaseAt then
-                due[n.kind], t.fired = true, true
+        if n.progress ~= nil then
+            if not t or t.progress == nil or n.progress < t.progress - 0.2 or n.kind ~= t.kind then
+                t = {kind = n.kind}
+                self.tracks[n.id] = t
+            end
+            t.progress, t.at = n.progress, now
+            -- The game's Hit accepts scale > .8 and marks misses at 1.2.
+            -- Aim near the center, with old timing settings bounded to that window.
+            local target = math.max(0.85, math.min(1.1, 1 + self.config.timingOffsetMs / 1000))
+            if not t.fired and not self.releaseAt and n.progress >= target and n.progress < 1.2 then
+                if n.partner then
+                    pair = pair or n
+                else
+                    due[n.kind], pending[#pending + 1] = true, t
+                end
+            end
+        else
+            if not t or t.x == nil or n.x < t.x - 50 or n.kind ~= t.kind then
+                t = {x = n.x, at = now, kind = n.kind, observed = 0, first = now}
+                self.tracks[n.id] = t
+            end
+            local elapsed = now - t.at
+            if elapsed > 0 then
+                local speed = (n.x - t.x) / elapsed
+                if speed > 60 and speed < 900 then t.speed = t.speed and t.speed * 0.3 + speed * 0.7 or speed end
+                t.observed = t.observed + 1
+            end
+            t.x, t.at = n.x, now
+            if t.speed and t.observed >= 2 and now - t.first >= 0.03 and not t.fired then
+                local eta = ((n.target or 1025) - n.x) / t.speed + self.config.timingOffsetMs / 1000
+                if eta <= 0 and eta > -0.15 and not self.releaseAt then
+                    due[n.kind], pending[#pending + 1] = true, t
+                end
             end
         end
     end
     for id, t in pairs(self.tracks) do if not seen[id] and now - t.at > 0.6 then self.tracks[id] = nil end end
+    if pair then
+        -- Hit renames BOTH objects NC on the first press, before the second input.
+        -- Send the captured pair together, with no unrelated input in between.
+        self:press({pair.kind, pair.partner.kind}, now, self.config.holdMs)
+        self.tracks[pair.id].fired = true
+        local other = self.tracks[pair.partner.id] or {kind = pair.partner.kind, progress = pair.progress}
+        other.at, other.fired = now, true
+        self.tracks[pair.partner.id] = other
+        return
+    end
     local kinds = {}
     for _, kind in ipairs({"left", "right", "q", "e"}) do if due[kind] then kinds[#kinds + 1] = kind end end
-    if #kinds > 0 then self:press(kinds, now, self.config.holdMs) end
+    if #kinds > 0 then
+        self:press(kinds, now, self.config.holdMs)
+        for _, track in ipairs(pending) do track.fired = true end
+    end
 end
 return Rhythm

@@ -1,5 +1,7 @@
 local Timer = require("src.Timer")
 local GuiIndex = require("src.GuiIndex")
+local GameState = require("src.GameState")
+local GameNotes = require("src.GameNotes")
 local Bindings = {}
 Bindings.__index = Bindings
 local KINDS = {"left", "right", "q", "e"}
@@ -70,7 +72,8 @@ function Bindings.new(player, saved, ownGui)
     local self = setmetatable({player = player, saved = type(saved) == "table" and saved or {},
         ownGui = ownGui, roots = {}, errors = {}, reported = {}, lastKinds = {}, detectedKinds = {},
         records = {}, learned = {}, imageObjects = {}, controls = {}, nextRoots = 0,
-        nextControls = 0, nextLegacy = 0, groups = {}, running = false, candidateReads = 0}, Bindings)
+        nextControls = 0, nextLegacy = 0, groups = {}, running = false, candidateReads = 0,
+        gameNotes = GameNotes.new()}, Bindings)
     for _, name in ipairs({"controls", "timers", "targets", "notes", "counters", "unknown"}) do self.groups[name] = group() end
     for _, kind in ipairs(KINDS) do
         local old = self.saved[kind]
@@ -207,6 +210,7 @@ end
 function Bindings:pause()
     if not self.running then return end
     self.index:close()
+    self.gameNotes:close()
     self.running, self.roots, self.controls, self.lastKinds, self.activeChallenge = false, {}, {}, {}, nil
     self.nextRoots, self.nextControls, self.nextLegacy = 0, 0, 0
 end
@@ -250,74 +254,88 @@ function Bindings:snapshot(now)
     end
     local controls = {}
     for role, object in pairs(self.controls) do if visible(object, memo) then controls[role] = object end end
-    local notes, counters, nearest, filtered = {}, {}, {}, {}
-    self:each("notes", function(object, r)
-        if visible(object, memo) then
-            local x, y = self:point(object, sx, sy)
-            local lane = (r.kind == "left" or r.kind == "right") and "top" or "bottom"
-            if x > 280 and x < 1085 and math.abs(y - (lane == "top" and 540 or 612)) < 30 then
-                self.detectedKinds[r.kind] = true
-                local target = controls[lane == "top" and "targetTop" or "targetBottom"]
-                local targetX = target and self:point(target, sx, sy) or 1025
-                notes[#notes + 1] = {id = object, kind = r.kind, x = x, target = targetX}
-                if x <= targetX + 30 and (not nearest[lane] or x > nearest[lane].x) then nearest[lane] = {kind = r.kind, x = x} end
-            end
-        end
-    end)
-    self:each("counters", function(object, r)
-        if visible(object, memo) then
-            local x, y = self:point(object, sx, sy)
-            if x > 960 and x < 1085 and y > 495 and y < 655 then counters[y < 575 and "top" or "bottom"] = r.count end
-        end
-    end)
-    for _, lane in ipairs({"top", "bottom"}) do
-        local counter = controls[lane == "top" and "counterTop" or "counterBottom"]
-        if counter then
-            local count = tonumber(textOf(counter):match("^%s*(%d+)%s*$"))
-            if count and count <= 25 then counters[lane] = count end
-        end
-    end
-    for lane, note in pairs(nearest) do
-        local previous = self.lastKinds[lane]
-        self.lastKinds[lane] = {kind = note.kind, at = now, votes = previous and previous.kind == note.kind and previous.votes + 1 or 1}
-    end
-    local challenge
-    if self.activeChallenge then
-        local count = counters[self.activeChallenge.lane]
-        if count ~= nil then
-            self.activeChallenge.missing = 0
-            challenge = {visible = true, count = count, kind = self.activeChallenge.kind}
-        else
-            self.activeChallenge.missing = self.activeChallenge.missing + 1
-            if self.activeChallenge.missing >= 4 then self.activeChallenge = nil end
-        end
-    end
-    for _, lane in ipairs({"top", "bottom"}) do
-        local count, previous = counters[lane], self.lastKinds[lane]
-        if not self.activeChallenge and count ~= nil and previous and now - previous.at <= 6 and previous.votes >= 2 then
-            challenge = {visible = true, count = count, kind = previous.kind}
-            self.activeChallenge = {lane = lane, kind = previous.kind, missing = 0}
-            break
-        end
-    end
-    for _, note in ipairs(notes) do
-        local duplicate = false
-        for _, old in ipairs(filtered) do if old.kind == note.kind and math.abs(old.x - note.x) < 15 then duplicate = true; break end end
-        if not duplicate then filtered[#filtered + 1] = note end
-    end
     local character = self.player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local health = humanoid and humanoid.Health
+    local state = GameState.read(self.roots.PlayerGui, health, visible, memo)
+    if state then controls.start = state.start end
+    local notes, counters, nearest, filtered = {}, {}, {}, {}
+    local challenge
+    if state then
+        filtered, challenge = self.gameNotes:read(state, visible, memo)
+        for _, note in ipairs(filtered) do self.detectedKinds[note.kind] = true end
+        if challenge then self.detectedKinds[challenge.kind] = true end
+    else
+        self.gameNotes:read(nil, visible, memo)
+        self:each("notes", function(object, r)
+            if visible(object, memo) then
+                local x, y = self:point(object, sx, sy)
+                local lane = (r.kind == "left" or r.kind == "right") and "top" or "bottom"
+                if x > 280 and x < 1085 and math.abs(y - (lane == "top" and 540 or 612)) < 30 then
+                    self.detectedKinds[r.kind] = true
+                    local target = controls[lane == "top" and "targetTop" or "targetBottom"]
+                    local targetX = target and self:point(target, sx, sy) or 1025
+                    notes[#notes + 1] = {id = object, kind = r.kind, x = x, target = targetX}
+                    if x <= targetX + 30 and (not nearest[lane] or x > nearest[lane].x) then nearest[lane] = {kind = r.kind, x = x} end
+                end
+            end
+        end)
+        self:each("counters", function(object, r)
+            if visible(object, memo) then
+                local x, y = self:point(object, sx, sy)
+                if x > 960 and x < 1085 and y > 495 and y < 655 then counters[y < 575 and "top" or "bottom"] = r.count end
+            end
+        end)
+        for _, lane in ipairs({"top", "bottom"}) do
+            local counter = controls[lane == "top" and "counterTop" or "counterBottom"]
+            if counter then
+                local count = tonumber(textOf(counter):match("^%s*(%d+)%s*$"))
+                if count and count <= 25 then counters[lane] = count end
+            end
+        end
+        for lane, note in pairs(nearest) do
+            local previous = self.lastKinds[lane]
+            self.lastKinds[lane] = {kind = note.kind, at = now, votes = previous and previous.kind == note.kind and previous.votes + 1 or 1}
+        end
+        if self.activeChallenge then
+            local count = counters[self.activeChallenge.lane]
+            if count ~= nil then
+                self.activeChallenge.missing = 0
+                challenge = {visible = true, count = count, kind = self.activeChallenge.kind}
+            else
+                self.activeChallenge.missing = self.activeChallenge.missing + 1
+                if self.activeChallenge.missing >= 4 then self.activeChallenge = nil end
+            end
+        end
+        for _, lane in ipairs({"top", "bottom"}) do
+            local count, previous = counters[lane], self.lastKinds[lane]
+            if not self.activeChallenge and count ~= nil and previous and now - previous.at <= 6 and previous.votes >= 2 then
+                challenge = {visible = true, count = count, kind = previous.kind}
+                self.activeChallenge = {lane = lane, kind = previous.kind, missing = 0}
+                break
+            end
+        end
+        for _, note in ipairs(notes) do
+            local duplicate = false
+            for _, old in ipairs(filtered) do if old.kind == note.kind and math.abs(old.x - note.x) < 15 then duplicate = true; break end end
+            if not duplicate then filtered[#filtered + 1] = note end
+        end
+    end
     -- Recovery should not wait for the random sequence to show all four keys.
     -- Keep the guard for a HUD where no prompt has ever been understood.
     local ready = next(self.detectedKinds) ~= nil
     for _, kind in ipairs(KINDS) do
         if self.saved[kind] then ready = true end
     end
+    local training = not controls.start and ((controls.targetTop and controls.targetBottom) ~= nil or #filtered > 0 or challenge ~= nil)
+    if state then training = state.training end
     return {start = controls.start ~= nil, menu = controls.menu ~= nil, respawn = controls.respawn ~= nil,
         confirm = controls.confirm ~= nil, reconnect = controls.reconnect ~= nil,
         timer = controls.timer and Timer.parse(textOf(controls.timer)),
-        alive = humanoid ~= nil and humanoid.Health > 0, bindingsReady = ready,
-        training = not controls.start and ((controls.targetTop and controls.targetBottom) ~= nil or #filtered > 0 or challenge ~= nil),
+        alive = health ~= nil and health > 0, bindingsReady = ready, training = training,
+        trainingKnown = state ~= nil, gameActive = state and state.active,
+        startAllowed = not state or state.canStart, needsRecovery = state and state.needsRecovery,
+        startBlocked = state and state.blocked,
         notes = filtered, challenge = challenge, controls = controls}
 end
 Bindings.visible = visible

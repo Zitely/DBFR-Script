@@ -264,6 +264,8 @@ mock.install()
 require("tests.integration")(test, equal, mock)
 require("tests.performance")(test, equal, mock)
 require("tests.capture")(test, equal, mock)
+require("tests.game_state")(test, equal, mock)
+require("tests.minigame")(test, equal, mock)
 
 print(string.format("\n%d tests passed; %d failed", passed, failed))
 assert(failed == 0, "Test suite failed")

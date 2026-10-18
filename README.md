@@ -1,11 +1,11 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.1.2 has one Chamber toggle,
+orange and gold Dragon Ball themed hub. **Version 1.2.0 has one Chamber toggle,
 a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
 The hub supports additional feature rows as the project grows. Detection is
-automatic, but the current game HUD still needs a compatibility update when
-its prompt names or images are not recognized; see the capture instructions below.
+automatic. It now reads DBFR's live note lanes, linked double notes, and mash
+counters using the game controller and Minigame module supplied by the user.
 
 ## Run
 
@@ -26,10 +26,10 @@ to pause, or × to exit. Execute the full script again to reopen after exiting.
 The panel displays the current action and bottom-right HTC timer. Fresh execution
 starts with Chamber off. Running the script again unloads its previous instance,
 releases held inputs, and disconnects the old loop before creating the new panel.
-Turning Chamber on during an existing minigame can now adopt it after three
-observations of recognized prompts with a living character and no Start button.
-Recovery still waits for a fresh Start after respawn. Recovery no longer requires
-all four prompt types to appear first; at least one must have been recognized.
+Turning Chamber on during an existing minigame adopts it after three observations
+of the game's active training state. It moves the pointer away from the hub before
+sending inputs. Recovery waits for a fresh Start after respawn and uses the game's
+health, cooldown, and resting gates instead of treating a visible Start as ready.
 
 `loader.lua` and `dist/chamber.lua` are identical, self-contained programs. Their
 first line is:
@@ -61,6 +61,9 @@ paused, and repeatedly rebuilt its object list. This version:
   budget checked between items. A single Roblox API call can exceed that budget.
 - Samples cached prompt positions at up to 60 Hz; checks cached controls about
   every 150 ms and refreshes status text every 400 ms. It skips unchanged UI values.
+- Observes direct children of the two known note lanes separately, so live notes
+  do not wait behind an inventory discovery backlog. Each lane's children are read
+  once when it is attached or replaced; subsequent additions/removals use events.
 
 In an offline fixture containing 3,000 unrelated labels, 120 paused frames went
 from over 5 million GUI type checks to zero. During 120 active frames after
@@ -71,11 +74,23 @@ in-game check.**
 
 ## Automatic detection
 
-Start, Respawn, Reconnect, and the HTC timer are identified from their visible
-text. The lines menu and hit rings also have layout-based detection. Prompts use
-labels, object names, input attributes, and automatically learned image/sprite
-signatures; old saved mappings remain readable for existing users. There is no
-binding page or calibration step.
+For the supplied DBFR HUD, training state comes from `Main.Active` and
+`Main.Frame.Visible`. Start is `Main["Button Thing"].Start.TextButton`; it waits for
+health above 2, `Main.UICoolDown` false, and
+`Characters.Interactions.Resting` false. These values are read, never rewritten.
+
+Only direct children of `Main.Frame.Attack` and `Block` are live notes. Their names
+identify MouseButton1/MouseButton2 or Q/E; `NC` means consumed. The reader uses
+`Position.X.Scale`, so note timing does not depend on screen resolution. Double
+notes reference their partner through `Obj.Value`. A top-level `mash` note names
+its input in the `Key` attribute and uses `CounterA` or `CounterB`; nested visual
+copies and the templates under `Frame.Keys` are ignored.
+
+The lines menu still uses its name or reference layout; Respawn, confirmation,
+Reconnect, and HTC timer use visible text and layout. Exact recovery-menu paths
+have not yet been supplied, so menu recognition still needs an in-game check.
+Older HUDs retain the generic label/name/attribute and learned-image fallback.
+There is no binding page or calibration step.
 
 ### Capture an unrecognized minigame
 
@@ -101,9 +116,11 @@ spread across frames; collection is capped and any truncation is recorded.
 All listeners disconnect when recording ends or the capture is rerun. If needed,
 `getgenv().__DBFR_CAPTURE.stop()` ends recording early and exports the report.
 
-The supplied Cobalt sample contained four `{2, 0.3}` pairs in an incoming event.
-Their meanings are not established. No mapping of `2` to a key or `0.3` to input
-timing has been added; the capture is intended to establish that relationship.
+The supplied Minigame module establishes that each incoming pair is `{type, gap}`:
+1 = attack, 2 = block, 3 = linked double, 4 = attack mash, 5 = block mash. Thus
+`{2, 0.3}` schedules a block-lane note with a 0.3-second gap. Actual keys are chosen
+randomly on the client, and harder difficulties add more notes. Autoplay therefore
+reads the spawned GUI notes; it does not replay events or send fabricated results.
 
 The scanner cannot infer Q/E/left/right from an opaque image with no identifying
 metadata or known signature. Such a HUD needs a game-specific compatibility
@@ -111,25 +128,31 @@ update; removing calibration does not give the script image recognition. It
 also cannot read timer or counter digits drawn entirely inside images. Unknown
 prompts are not assigned arbitrary inputs.
 
-Automatic layout uses the original 1280×720 reference scaled to the Roblox
-viewport, including both rhythm lanes and the bottom-right timer. Non-16:9
-layouts or substantially changed HUDs may need layout adaptation. The Lua version
-follows the Roblox window and has no desktop monitor selection.
+The fallback layout and timer/menu detection use the original 1280×720 reference
+scaled to the viewport. Non-16:9 layouts or changed menus may need adaptation;
+the known note lanes use their own normalized positions. The Lua version follows
+the Roblox window and has no desktop monitor selection.
 
 ## Automation
 
-- **Rhythm:** predicts when moving prompts reach the hit rings and sends
-  left/right mouse or Q/E input. Default timing offset is −40 ms with a 38 ms hold.
-  These are game inputs, not keyboard shortcuts for the hub.
-- **25-press challenge:** locks the nearest identified prompt and pulses until
+- **Rhythm:** presses the rightmost live note in each lane inside the game's
+  normalized hit window (above 0.8, below 1.2). The default target is 0.96 with a
+  38 ms hold; legacy timing adjustments are bounded to stay inside that window.
+  Linked doubles send both captured keys together, within the game's 0.2-second
+  second-input deadline. Older HUDs retain motion prediction. These are game
+  inputs, not keyboard shortcuts for the hub.
+- **25-press challenge:** starts on the first visible counter using the mash note's
+  actual key, and continues tracking that note beyond the normal hit window until
   the counter reaches zero on three observations or disappears on four. Defaults
   are 20 ms held and 20 ms released, with a cap of 125 attempts. Frame scheduling
   and the executor affect the actual rate; sending a press does not prove the
-  game counted it.
-- **Recovery:** detects missing training UI after two seconds, becomes eligible
-  after eight seconds, and clicks **lines menu → Respawn → confirmation**. It
-  waits at least eight seconds for respawn, requires a living character and three
-  ready samples, then sends a fresh Start before accepting training again.
+  game counted it. Consecutive mash notes are distinguished by object identity.
+- **Recovery:** notices health at or below 1 on the next state check (about 100 ms),
+  or health at or below 2 when training is inactive, and starts
+  **lines menu → Respawn → confirmation**. Missing UI retains the eight-second
+  fallback. It waits at least eight seconds after confirmation, requires three
+  ready samples with health above 2, cleared cooldown, and no resting, then sends
+  a fresh Start. Missing menu controls pause with a specific status.
 - **HTC timer:** verifies two plausible readings and extrapolates between reads.
   At 35 minutes remaining by default, it enters AFK. Unknown timers are not given
   a guessed duration. A verified countdown survives normal respawn.
@@ -173,6 +196,7 @@ is a separate repository.
 | `src/Rhythm.lua` | Note motion, input timing, and spam lifecycle |
 | `src/GuiIndex.lua` | Bounded discovery and GUI event subscriptions |
 | `src/Bindings.lua` | Automatic recognition and cached candidate sampling |
+| `src/GameState.lua`, `src/GameNotes.lua` | Exact DBFR state gates and live note/counter reader |
 | `src/Input.lua` | Smooth movement, cancellation, and input release |
 | `src/UI.lua` | Compact Dragon Ball hub and independent feature rows |
 | `src/Main.lua` | Chamber lifecycle, saved configuration, optional teleport reload |
@@ -193,7 +217,9 @@ status labels. Keep the feature's state, input handling, and cleanup independent
 of Chamber; adding a row does not start another scanning loop. Chamber currently
 registers one row in `Main.lua`. No keyboard binding is needed.
 
-The offline suite covers recovery order, post-respawn Start gating, repeated
+The 89-test offline suite covers exact note names and normalized timing across
+difficulty speeds, linked doubles, 25 accepted mash inputs at 30/60 Hz, lane
+replacement, recovery order, post-respawn Start gating, repeated
 reconnects, timer retention, sustained spam, cancellation and release, automatic
 recognition, event-driven discovery, pause/unload cleanup, and large GUI fixtures.
 It uses deterministic Roblox API doubles and does not render Roblox or validate
