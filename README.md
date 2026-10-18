@@ -33,14 +33,34 @@ execution. Re-executing the script unloads the previous instance first.
 
 The optional [`loader.lua`](loader.lua) downloads the bundle from
 [`Zitely/DBFR-Script`](https://github.com/Zitely/DBFR-Script) and caches a copy for
-optional teleport reload. Run it with:
+optional teleport reload. Paste its **complete contents** into your executor to
+get separate download, compilation, and startup errors. The short launcher below
+also checks the functions that the previous one-line launcher called blindly:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/loader.lua"))()
+local compile = loadstring
+assert(type(compile) == "function",
+    "loadstring is unavailable. Paste the complete dist/chamber.lua file instead.")
+local ok, source = pcall(function()
+    return game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/loader.lua")
+end)
+assert(ok, "Loader download failed: " .. tostring(source))
+local run, reason = compile(source, "Chamber launcher")
+assert(type(run) == "function", "Loader compilation failed: " .. tostring(reason))
+run()
 ```
 
 The loader requires a publicly readable raw URL and executor HTTP support. If
 either is unavailable, paste the complete `dist/chamber.lua` file instead.
+
+### `:1: attempt to call a nil value`
+
+The old one-line launcher could produce this if `loadstring` was missing, or if
+compilation returned no function. The line number alone does not identify which
+call failed. Use the checked launcher above or paste the full bundle directly;
+the full bundle needs neither HTTP nor `loadstring` to start. If it still fails,
+share the full error and executor name. Ordinary Roblox LocalScripts do not
+provide the executor capabilities this application uses.
 
 ## Calibration
 
