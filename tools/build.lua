@@ -20,6 +20,6 @@ local function build(modules, entry, header, outputs)
     end
 end
 build({"Config", "Timer", "Engine", "Rhythm", "GuiIndex", "GameState", "GameNotes", "Bindings", "Input", "UI", "Main"}, "Main",
-    "-- CHAMBER FULL SCRIPT - no download needed.\n-- Chamber / Saiyan Control 1.2.7",
+    "-- CHAMBER FULL SCRIPT - no download needed.\n-- Chamber / Saiyan Control 1.2.8",
     {"loader.lua", "dist/chamber.lua"})
 build({"GuiIndex", "Capture"}, "Capture", "-- CHAMBER READ-ONLY CAPTURE - no download needed.", {"dist/capture_minigame.lua"})

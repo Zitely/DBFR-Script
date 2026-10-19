@@ -1,7 +1,7 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.2.7 has one Chamber toggle,
+orange and gold Dragon Ball themed hub. **Version 1.2.8 has one Chamber toggle,
 a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
 The hub supports additional feature rows as the project grows. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
@@ -35,7 +35,10 @@ Turning Chamber on during an existing minigame adopts it after three observation
 of the game's active training state. It moves the pointer away from the hub before
 sending inputs. Recovery waits for a fresh Start after respawn and uses the game's
 health, cooldown, resting, and exact death-screen state instead of treating a
-visible Start as ready.
+visible Start as ready. When Chamber is turned on in the HTC, it checks the
+player's `Difficulty` attribute and selects **Nightmare** through the game's
+`DifficultySet` remote only when Nightmare is not already selected. It rechecks
+after a respawn.
 
 `loader.lua` and `dist/chamber.lua` are identical, self-contained programs. Their
 first line is:

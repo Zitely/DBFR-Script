@@ -151,6 +151,7 @@ function M.reset()
     workspace = M.object("Workspace", "Workspace", game)
     workspace.CurrentCamera = {ViewportSize = M.vector(1280, 720)}
     M.player = M.object("Player", "LocalPlayer")
+    M.player.CharacterAdded = signal()
     M.playerGui = M.object("PlayerGui", "PlayerGui", M.player)
     M.character = M.object("Model", "Character", workspace)
     M.humanoid = M.object("Humanoid", "Humanoid", M.character, {Health = 100})

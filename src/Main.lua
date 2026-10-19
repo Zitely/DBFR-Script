@@ -5,7 +5,7 @@ local Bindings = require("src.Bindings")
 local Input = require("src.Input")
 local UI = require("src.UI")
 local Main = {}
-local VERSION = "1.2.7"
+local VERSION = "1.2.8"
 
 function Main.start()
     local env = type(getgenv) == "function" and getgenv() or _G
@@ -45,6 +45,29 @@ function Main.start()
         local ok, reason = pcall(rhythm.reset, rhythm)
         local released, detail = pcall(input.releaseAll, input)
         if not ok or not released then log("Input release needs attention: " .. tostring(reason or detail)) end
+    end
+    local function ensureNightmare()
+        if player:GetAttribute("Difficulty") == "Nightmare" then
+            log("Nightmare difficulty already selected")
+            return true
+        end
+        local remote = game:GetService("ReplicatedStorage"):FindFirstChild("DifficultySet")
+        if not remote or type(remote.FireServer) ~= "function" then
+            log("Nightmare difficulty could not be selected: DifficultySet is unavailable")
+            return false
+        end
+        local previous = player:GetAttribute("Difficulty")
+        local ok, reason = pcall(function()
+            player:SetAttribute("Difficulty", "Nightmare")
+            remote:FireServer("Nightmare")
+        end)
+        if ok then
+            log("Nightmare difficulty selected")
+            return true
+        end
+        pcall(player.SetAttribute, player, "Difficulty", previous)
+        log("Nightmare difficulty could not be selected: " .. tostring(reason))
+        return false
     end
     local function registerQueue()
         if not config.resumeAfterTeleport or queueRegistered then return end
@@ -89,6 +112,7 @@ end)
             release()
             bindings.lastKinds, bindings.activeChallenge = {}, nil
             engine:setActive(true, os.clock())
+            ensureNightmare()
             save(); registerQueue()
             ui:updateFeature("chamber", engine, rhythm, os.clock())
         end
@@ -117,6 +141,12 @@ end)
     log(input:description())
     if type(env.writefile) ~= "function" then log("File storage unavailable: settings last for this session only") end
     ui:updateFeature("chamber", engine, rhythm, os.clock())
+    connections[#connections + 1] = player.CharacterAdded:Connect(function()
+        task.spawn(function()
+            task.wait(1)
+            if live and engine.active then ensureNightmare() end
+        end)
+    end)
     local snapshot = {notes = {}, training = false}
     connections[#connections + 1] = game:GetService("RunService").Heartbeat:Connect(function()
         if not live or not engine.active then return end
