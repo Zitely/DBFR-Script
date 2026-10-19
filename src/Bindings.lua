@@ -163,8 +163,18 @@ function Bindings:classify(object, root)
     local x, y, w, h = self:point(object, sx, sy)
     -- Roblox's three-line menu is normally part of CoreGui, while some games
     -- replace it with a PlayerGui button. Both occupy this small top-left area.
-    if gameGui and button and not r.role and object.ClassName == "ImageButton"
-        and math.abs(x - 63) < 22 and math.abs(y - 22) < 18 and w < 65 and h < 65 then r.role = "menu" end
+    if gameGui and button and not r.role and (object.ClassName == "ImageButton" or object.ClassName == "TextButton") then
+        local topLeft
+        if root == "CoreGui" then
+            -- Roblox's top bar uses fixed physical pixels instead of scaling with
+            -- the game HUD. Its menu button is the compact control at top-left.
+            local p, size = button.AbsolutePosition, button.AbsoluteSize
+            topLeft = p.X >= 0 and p.X < 96 and p.Y >= 0 and p.Y < 56 and size.X <= 96 and size.Y <= 80
+        else
+            topLeft = math.abs(x - 63) < 22 and math.abs(y - 22) < 18 and w < 65 and h < 65
+        end
+        if topLeft then r.role = "menu" end
+    end
     if r.role then r.button = button; insert(self.groups.controls, object) end
     if root ~= "PlayerGui" then
         if r.role or controlsChanged then self.nextControls = 0 end
