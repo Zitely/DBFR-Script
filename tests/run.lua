@@ -109,6 +109,18 @@ test("unmapped prompts stop recovery instead of repeatedly respawning", function
     e:step({menu = true, bindingsReady = false}, 16)
     equal(e.active, false); assert(e.status:find("not recognized automatically"))
 end)
+test("low health keeps looking for the menu and reopens it when Respawn is absent", function()
+    local e = engine({recoveryAttempts = 5, recoveryMenuWait = 3, recoveryRetryDelay = 1})
+    local s = {trainingKnown = true, needsRecovery = true, menu = true}
+    local a = e:step(s, 0)
+    equal(a.kind, "menu"); e:complete(a, true, 0.1)
+    equal(e:step(s, 3.2), nil); equal(e.state, "lost")
+    equal(e:step(s, 4.3).kind, "menu"); equal(e.recoveryCount, 2)
+
+    e = engine({recoveryAttempts = 5})
+    for _, at in ipairs({0, 5, 10}) do equal(e:step({trainingKnown = true, needsRecovery = true}, at), nil) end
+    equal(e.active, true); assert(e.status:find("still looking"))
+end)
 test("failed UI action halts with its error", function()
     local e = engine()
     local a = e:step({start = true}, 0)

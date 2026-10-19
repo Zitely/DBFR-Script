@@ -135,6 +135,7 @@ return function(test, equal, mock)
     end)
     test("recognized game state without known prompts cannot reset the recovery limit", function()
         local f = fixture()
+        f.e = Engine.new(Config.new({recoveryAttempts = 2})); f.e:setActive(true, 0)
         for attempt = 1, 3 do
             f.active.Value, f.frame.Visible, mock.humanoid.Health = false, false, 100
             local at = (attempt - 1) * 20

@@ -142,15 +142,18 @@ function Bindings:classify(object, root)
         self.imageObjects[r.image] = self.imageObjects[r.image] or {}
         self.imageObjects[r.image][object] = true
     end
+    local gameGui = root == "PlayerGui" or root == "CoreGui"
     if button then
         if label == "start" then r.role = "start"
         elseif label == "reconnect" then r.role = "reconnect"
         elseif label == "respawn" then r.role = "respawn"
-        elseif root == "PlayerGui" and (label == "menu" or name == "menubutton" or name == "hamburgerbutton" or name == "linesmenu") then r.role = "menu" end
+        elseif gameGui and (label == "menu" or name == "menubutton" or name == "hamburgerbutton" or name == "linesmenu") then r.role = "menu" end
     end
     local sx, sy = self:scale()
     local x, y, w, h = self:point(object, sx, sy)
-    if root == "PlayerGui" and button and not r.role and object.ClassName == "ImageButton"
+    -- Roblox's three-line menu is normally part of CoreGui, while some games
+    -- replace it with a PlayerGui button. Both occupy this small top-left area.
+    if gameGui and button and not r.role and object.ClassName == "ImageButton"
         and math.abs(x - 63) < 22 and math.abs(y - 22) < 18 and w < 65 and h < 65 then r.role = "menu" end
     if r.role then r.button = button; insert(self.groups.controls, object) end
     if root ~= "PlayerGui" then

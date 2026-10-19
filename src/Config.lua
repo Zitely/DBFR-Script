@@ -5,7 +5,8 @@ Config.defaults = {
     spamMaxPresses = 125, afkMinutes = 35, lostSeconds = 8,
     respawnWait = 8, respawnTimeout = 45, startGrace = 8,
     reconnectCooldown = 9, reconnectPoll = 2, reconnectAttempts = 3,
-    loadWait = 7, loadTimeout = 150, startAttempts = 3, recoveryAttempts = 2,
+    loadWait = 7, loadTimeout = 150, startAttempts = 3, recoveryAttempts = 5,
+    recoveryMenuWait = 3, recoveryRetryDelay = 1,
     approachMs = 900, hoverMs = 180, clickHoldMs = 90,
     autoReconnect = true, autoRecover = true, autoStart = true,
     dryRun = false, resumeAfterTeleport = false,
@@ -17,7 +18,8 @@ Config.ranges = {
     lostSeconds = {3, 60}, respawnWait = {3, 30}, respawnTimeout = {30, 120},
     startGrace = {3, 30}, reconnectCooldown = {3, 60}, reconnectPoll = {0.5, 10},
     reconnectAttempts = {1, 10}, loadWait = {3, 30}, loadTimeout = {30, 300},
-    startAttempts = {1, 10}, recoveryAttempts = {1, 5}, approachMs = {200, 2000},
+    startAttempts = {1, 10}, recoveryAttempts = {1, 5}, recoveryMenuWait = {1, 10},
+    recoveryRetryDelay = {0.5, 10}, approachMs = {200, 2000},
     hoverMs = {50, 1000}, clickHoldMs = {30, 300},
 }
 

@@ -16,7 +16,7 @@ function Engine:setActive(enabled, now)
     self.generation = self.generation + 1
     self.active, self.pending = enabled, nil
     self.fresh, self.modalFrames, self.modalCandidate = 0, 0, false
-    self.nextModal = 0
+    self.nextModal, self.nextRecovery = 0, now
     if enabled then
         self.startCount, self.recoveryCount, self.reconnectCount = 0, 0, 0
         self.requiresStart, self.nextStart = true, now
@@ -126,7 +126,10 @@ function Engine:step(s, now)
     end
     if self.state == "respawn_menu" then
         if s.respawn and not c.dryRun then return self:action("respawn", now) end
-        if now - self.since > 4 then self:halt(now, "Respawn entry was not recognized; Chamber paused") end
+        if now - self.since > c.recoveryMenuWait then
+            self.nextRecovery = now + c.recoveryRetryDelay
+            self:transition("lost", now, "Respawn entry not visible; reopening the menu")
+        end
         return nil
     elseif self.state == "respawn_confirm" then
         if s.confirm and not c.dryRun then return self:action("confirm", now) end
@@ -155,13 +158,13 @@ function Engine:step(s, now)
         if not c.autoRecover or c.dryRun then self.status = s.startBlocked; return nil end
         if self.recoveryCount >= c.recoveryAttempts then
             self:halt(now, "Recovery retry limit reached")
-        elseif s.menu then
+        elseif s.menu and now >= (self.nextRecovery or 0) then
             self.recoveryCount = self.recoveryCount + 1
             self.requiresStart = true
             return self:action("menu", now)
         else
             if self.state ~= "lost" then self:transition("lost", now, "Health too low; looking for the lines menu") end
-            if now - self.since > 4 then self:halt(now, "Lines menu was not recognized; Chamber paused") end
+            if now - self.since > 4 then self.status = "Health too low; still looking for the lines menu" end
         end
         return nil
     end
