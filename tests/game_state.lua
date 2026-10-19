@@ -40,34 +40,32 @@ return function(test, equal, mock)
         equal(f.e:step(s, 0.4).kind, "start")
         f.b:pause()
     end)
-    test("low inactive health one or two requests shortcut recovery before Start", function()
+    test("low health one or two enters direct reset recovery before Start", function()
         local f = fixture()
         mock.humanoid.Health = 2
         local s = f.b:snapshot(0)
         equal(s.alive, true); equal(s.start, true); equal(s.startAllowed, false)
         equal(s.bindingsReady, false); equal(s.needsRecovery, true)
         local action = f.e:step(s, 0)
-        equal(action.kind, "respawnShortcut"); equal(f.e.startCount, 0); equal(f.e.recoveryCount, 1)
+        equal(action, nil); equal(f.e.startCount, 0); equal(f.e.recoveryCount, 1)
+        equal(f.e.state, "respawning")
         equal(f.e:canPlay(s), false); f.b:pause()
 
         f = fixture()
         mock.humanoid.Health = 1
         s = f.b:snapshot(0)
         action = f.e:step(s, 0)
-        equal(action.kind, "respawnShortcut"); equal(f.e.recoveryCount, 1)
+        equal(action, nil); equal(f.e.recoveryCount, 1); equal(f.e.state, "respawning")
         f.b:pause()
     end)
-    test("a running minigame remains valid at health 2 but stops at the controller's health 1 threshold", function()
+    test("a running minigame enters direct recovery at health two", function()
         local f = fixture()
         f.active.Value, f.frame.Visible = true, true
         mock.humanoid.Health = 2
         local s = f.b:snapshot(0)
-        equal(s.training, true); equal(s.needsRecovery, false)
-        for i = 1, 3 do f.e:step(s, i * 0.1) end
-        mock.humanoid.Health = 1
-        s = f.b:snapshot(0.4)
-        equal(s.training, false); equal(f.e:canPlay(s), false)
-        equal(f.e:step(s, 0.4).kind, "respawnShortcut")
+        equal(s.training, true); equal(s.needsRecovery, true)
+        equal(f.e:step(s, 0), nil); equal(f.e.state, "respawning")
+        equal(f.e:canPlay(s), false)
         f.b:pause()
     end)
     test("cooldown resting and missing character state wait without spending Start or recovery attempts", function()
@@ -84,15 +82,20 @@ return function(test, equal, mock)
                 f.resting = mock.object("BoolValue", "Resting", mock.playerGui:FindFirstChild("Characters"):FindFirstChild("Interactions"), {Value = false})
             end
             f.cooldown.Value, f.resting.Value, f.active.Value, mock.humanoid.Health = false, false, false, 100
-            equal(f.e:step(f.b:snapshot(21), 21).kind, "start")
+            if condition == "dead" then
+                for _, at in ipairs({21, 21.1, 21.2}) do equal(f.e:step(f.b:snapshot(at), at), nil) end
+                equal(f.e.state, "seeking")
+                equal(f.e:step(f.b:snapshot(21.3), 21.3).kind, "start")
+            else
+                equal(f.e:step(f.b:snapshot(21), 21).kind, "start")
+            end
             f.b:pause()
         end
     end)
     test("respawn readiness needs health above 2 and cleared cooldown before a fresh Start", function()
         local f = fixture()
         mock.humanoid.Health = 2
-        local a = f.e:step(f.b:snapshot(0), 0); equal(a.kind, "respawnShortcut"); f.e:complete(a, true, 1)
-        a = f.e:step({confirm = true}, 2); f.e:complete(a, true, 3)
+        local a = f.e:step(f.b:snapshot(0), 0); equal(a, nil); equal(f.e.state, "respawning")
         mock.humanoid.Health = 2
         for i = 13, 16 do equal(f.e:step(f.b:snapshot(i), i), nil) end
         equal(f.e.state, "respawning")
@@ -109,7 +112,7 @@ return function(test, equal, mock)
         local f = fixture()
         mock.humanoid.Health = 1
         local action = f.e:step(f.b:snapshot(0), 0)
-        equal(action.kind, "respawnShortcut"); f.e:complete(action, true, 0.05)
+        equal(action, nil); equal(f.e.state, "respawning")
         local ui = mock.object("ScreenGui", "RespawnUI", mock.playerGui)
         local canvas = mock.object("CanvasGroup", "RespawnCanvas", ui, {GroupTransparency = 1})
         local s = f.b:snapshot(0.1)
@@ -146,8 +149,7 @@ return function(test, equal, mock)
             mock.humanoid.Health, f.active.Value, f.frame.Visible = 2, false, false
             action = f.e:step(f.b:snapshot(at + 5), at + 5)
             if attempt < 3 then
-                equal(action.kind, "respawnShortcut"); f.e:complete(action, true, at + 6)
-                action = f.e:step({confirm = true}, at + 7); f.e:complete(action, true, at + 8)
+                equal(action, nil); equal(f.e.state, "respawning")
                 mock.humanoid.Health = 100
                 for i = 1, 3 do f.e:step(f.b:snapshot(at + 18 + i * 0.1), at + 18 + i * 0.1) end
             else

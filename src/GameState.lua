@@ -20,7 +20,9 @@ function GameState.read(playerGui, health, visible, memo)
     local respawnCanvas = child(child(playerGui, "RespawnUI"), "RespawnCanvas")
     local training = active and visible(frame, memo) and health ~= nil and health > 1
     local canStart = not active and not cooldown and resting == false and health ~= nil and health > 2
-    local needsRecovery = health ~= nil and health > 0 and (health <= 1 or (not active and health <= 2))
+    -- The direct recovery monitor resets at Health <= 2 even during an active
+    -- minigame, matching the game's Start health gate.
+    local needsRecovery = health ~= nil and health > 0 and health <= 2
     local blocked
     if health == nil or health <= 0 then blocked = "Waiting for your character to respawn"
     elseif needsRecovery then blocked = "Health too low to train; recovery needed"

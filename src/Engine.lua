@@ -55,9 +55,6 @@ function Engine:complete(action, ok, now, reason)
     elseif action.kind == "menu" then
         self.mayAdopt = false
         self:transition("respawn_menu", now, "Waiting for the menu's Respawn entry")
-    elseif action.kind == "respawnShortcut" then
-        self.mayAdopt = false
-        self:transition("respawn_confirm", now, "Sent Escape then R; waiting for the Respawn confirmation")
     elseif action.kind == "respawn" then
         self:transition("respawn_confirm", now, "Waiting for the Respawn confirmation")
     elseif action.kind == "confirm" then
@@ -132,6 +129,10 @@ function Engine:step(s, now)
         self:waitForRespawn(now, "Respawn screen detected; waiting for your character", now)
         return nil
     end
+    if s.trainingKnown and s.alive == false and self.state ~= "respawning" then
+        self:waitForRespawn(now, "Character reset; waiting for your character", now + c.respawnWait)
+        return nil
+    end
     local remaining = self.timer:remaining(now)
     if remaining and remaining <= c.afkMinutes * 60 and c.afkMinutes > 0 then
         self.afkUntil, self.afkComplete = now + c.afkDurationMinutes * 60, false
@@ -176,7 +177,7 @@ function Engine:step(s, now)
         elseif now >= (self.nextRecovery or 0) then
             self.recoveryCount = self.recoveryCount + 1
             self.requiresStart = true
-            return self:action("respawnShortcut", now)
+            self:waitForRespawn(now, "Health too low; resetting character", now + c.respawnWait)
         end
         return nil
     end

@@ -5,8 +5,9 @@ local Bindings = require("src.Bindings")
 local Input = require("src.Input")
 local UI = require("src.UI")
 local Weights = require("src.Weights")
+local Respawn = require("src.Respawn")
 local Main = {}
-local VERSION = "1.3.0"
+local VERSION = "1.4.0"
 
 function Main.start()
     local env = type(getgenv) == "function" and getgenv() or _G
@@ -28,7 +29,7 @@ function Main.start()
     local ui, engine, bindings, rhythm
     local input = Input.new(env)
     local live, queueRegistered = true, false
-    local actionRunning, nextEngine, nextUI, lastTick = false, 0, 0, -math.huge
+    local actionRunning, nextEngine, nextUI, nextHealthCheck, lastTick = false, 0, 0, 0, -math.huge
     local wasPlaying = false
     local reportedBindingErrors = {}
     local connections = {}
@@ -159,6 +160,14 @@ end)
         if now - lastTick < 1 / 60 - 0.001 then return end
         lastTick = now
         local ok, reason = pcall(function()
+            -- Monitor at the requested 50 ms interval. A direct reset is much
+            -- faster and more reliable than navigating Roblox's respawn menu.
+            if config.autoRecover and not config.dryRun and now >= nextHealthCheck then
+                nextHealthCheck = now + 0.05
+                if Respawn.resetIfNeeded(player) then
+                    log("Health <= 2 detected; resetting character")
+                end
+            end
             snapshot = bindings:snapshot(now)
             for _, detail in ipairs(bindings.errors) do
                 if not reportedBindingErrors[detail] then log(detail); reportedBindingErrors[detail] = true end
@@ -181,24 +190,20 @@ end)
                     task.spawn(function()
                         local valid = function() return live and engine.active and engine.generation == action.generation end
                         local succeeded, detail
-                        if action.kind == "respawnShortcut" then
-                            succeeded, detail = pcall(input.respawnShortcut, input, config, valid)
-                        else
-                            local ready = true
-                            if action.kind == "start" then
-                                ready = ensureNightmare(true)
-                                if ready then
-                                    local found, equipped, name = pcall(Weights.equipBest, player)
-                                    if found and equipped then log("Equipped " .. name .. " before training")
-                                    elseif not found then log("Weight check failed: " .. tostring(equipped)) end
-                                else detail = "Nightmare difficulty was not selected" end
-                            end
+                        local ready = true
+                        if action.kind == "start" then
+                            ready = ensureNightmare(true)
                             if ready then
-                                local target = snapshot.controls[action.kind]
-                                succeeded, detail = pcall(input.click, input, target, config, valid, action.kind == "start")
-                            else
-                                succeeded = false
-                            end
+                                local found, equipped, name = pcall(Weights.equipBest, player)
+                                if found and equipped then log("Equipped " .. name .. " before training")
+                                elseif not found then log("Weight check failed: " .. tostring(equipped)) end
+                            else detail = "Nightmare difficulty was not selected" end
+                        end
+                        if ready then
+                            local target = snapshot.controls[action.kind]
+                            succeeded, detail = pcall(input.click, input, target, config, valid, action.kind == "start")
+                        else
+                            succeeded = false
                         end
                         engine:complete(action, succeeded, os.clock(), detail)
                         actionRunning = false
