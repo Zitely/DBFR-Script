@@ -35,6 +35,12 @@ function Engine:action(kind, now)
     self.pending = action
     return action
 end
+function Engine:waitForRespawn(now, message, readyAfter)
+    self.requiresStart, self.fresh, self.mayAdopt = true, 0, false
+    self.downSince = nil
+    self:transition("respawning", now, message)
+    self.readyAfter = readyAfter
+end
 function Engine:complete(action, ok, now, reason)
     if action ~= self.pending or action.generation ~= self.generation then return end
     self.pending = nil
@@ -53,9 +59,7 @@ function Engine:complete(action, ok, now, reason)
     elseif action.kind == "respawn" then
         self:transition("respawn_confirm", now, "Waiting for the Respawn confirmation")
     elseif action.kind == "confirm" then
-        self.requiresStart, self.fresh, self.mayAdopt = true, 0, false
-        self:transition("respawning", now, "Waiting for your character to respawn")
-        self.readyAfter = now + self.config.respawnWait
+        self:waitForRespawn(now, "Waiting for your character to respawn", now + self.config.respawnWait)
     elseif action.kind == "reconnect" then
         self.mayAdopt = false
         self.reconnectCount = self.reconnectCount + 1
@@ -109,6 +113,13 @@ function Engine:step(s, now)
         return nil
     end
     if self.state == "afk" then return nil end
+    -- RespawnLocal creates PlayerGui.RespawnUI.RespawnCanvas on Humanoid.Died
+    -- and removes it only after the new character has AttackCheck. It is an
+    -- exact signal, so never keep clicking recovery controls through it.
+    if s.respawnCanvas and self.state ~= "respawning" then
+        self:waitForRespawn(now, "Respawn screen detected; waiting for your character", now)
+        return nil
+    end
     local remaining = self.timer:remaining(now)
     if remaining and remaining <= c.afkMinutes * 60 and c.afkMinutes > 0 then
         self:transition("afk", now, "HTC threshold reached; waiting for the Reconnect button")
@@ -125,7 +136,8 @@ function Engine:step(s, now)
     elseif self.state == "respawning" then
         if now - self.since > c.respawnTimeout then
             self:halt(now, "Respawn loading timed out")
-        elseif now >= self.readyAfter and s.alive and s.start and not s.confirm and s.startAllowed ~= false then
+        elseif not s.respawnCanvas and now >= self.readyAfter and s.alive and s.start
+            and not s.confirm and s.startAllowed ~= false then
             self.fresh = self.fresh + 1
             if self.fresh >= 3 then
                 self.startCount, self.nextStart, self.fresh = 0, now, 0
@@ -136,6 +148,17 @@ function Engine:step(s, now)
     end
     -- The game's health gate is independent of whether icon names are known.
     -- Handle it before a still-visible Start can consume the retry budget.
+    if s.trainingKnown and s.down then
+        self.fresh = 0
+        if s.respawnCanvas then return nil end
+        if self.state ~= "waiting_respawn_ui" then
+            self.downSince = now
+            self:transition("waiting_respawn_ui", now, "Character down; waiting for the game's respawn screen")
+        end
+        -- RespawnLocal fades its canvas in after five seconds. Give it a small
+        -- margin before attempting the user's manual lines-menu fallback.
+        if not s.needsRecovery or now - (self.downSince or now) < c.respawnUiWait then return nil end
+    end
     if s.trainingKnown and s.needsRecovery then
         self.fresh = 0
         if not c.autoRecover or c.dryRun then self.status = s.startBlocked; return nil end

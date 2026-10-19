@@ -15,6 +15,9 @@ function GameState.read(playerGui, health, visible, memo)
     if type(active) ~= "boolean" or type(cooldown) ~= "boolean" or not frame
         or not frame:IsA("GuiObject") or not start or not start:IsA("GuiButton") then return nil end
     local resting = boolean(child(child(child(playerGui, "Characters"), "Interactions"), "Resting"))
+    -- RespawnLocal clones this as soon as Humanoid.Died fires, before its five
+    -- second fade-in. Presence is more reliable than the overlay's visibility.
+    local respawnCanvas = child(child(playerGui, "RespawnUI"), "RespawnCanvas")
     local training = active and visible(frame, memo) and health ~= nil and health > 1
     local canStart = not active and not cooldown and resting == false and health ~= nil and health > 2
     local needsRecovery = health ~= nil and health > 0 and (health <= 1 or (not active and health <= 2))
@@ -26,6 +29,7 @@ function GameState.read(playerGui, health, visible, memo)
     elseif resting then blocked = "Waiting for resting to finish"
     elseif cooldown then blocked = "Waiting for the training cooldown" end
     return {training = training, active = active, canStart = canStart, needsRecovery = needsRecovery,
+        down = health ~= nil and health <= 1, respawnCanvas = respawnCanvas ~= nil,
         attack = child(frame, "Attack"), block = child(frame, "Block"),
         counterA = child(frame, "CounterA"), counterB = child(frame, "CounterB"),
         blocked = blocked, start = not active and visible(start, memo) and start or nil}

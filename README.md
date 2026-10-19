@@ -1,7 +1,7 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.2.0 has one Chamber toggle,
+orange and gold Dragon Ball themed hub. **Version 1.2.1 has one Chamber toggle,
 a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
 The hub supports additional feature rows as the project grows. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
@@ -29,7 +29,8 @@ releases held inputs, and disconnects the old loop before creating the new panel
 Turning Chamber on during an existing minigame adopts it after three observations
 of the game's active training state. It moves the pointer away from the hub before
 sending inputs. Recovery waits for a fresh Start after respawn and uses the game's
-health, cooldown, and resting gates instead of treating a visible Start as ready.
+health, cooldown, resting, and exact death-screen state instead of treating a
+visible Start as ready.
 
 `loader.lua` and `dist/chamber.lua` are identical, self-contained programs. Their
 first line is:
@@ -78,6 +79,14 @@ For the supplied DBFR HUD, training state comes from `Main.Active` and
 `Main.Frame.Visible`. Start is `Main["Button Thing"].Start.TextButton`; it waits for
 health above 2, `Main.UICoolDown` false, and
 `Characters.Interactions.Resting` false. These values are read, never rewritten.
+
+The supplied `PlayerScripts.RespawnLocal` script creates
+`PlayerGui.RespawnUI.RespawnCanvas` whenever the Humanoid dies. Chamber detects
+that exact object as soon as it is cloned, stops all recovery clicks, and waits
+for it to disappear before collecting three fresh, start-ready samples. The game
+removes it only after the new character has its `AttackCheck`. If health is 1 but
+that canvas never appears within six seconds, Chamber falls back to the requested
+lines menu → Respawn route. Inactive health 2 uses that route immediately.
 
 Only direct children of `Main.Frame.Attack` and `Block` are live notes. Their names
 identify MouseButton1/MouseButton2 or Q/E; `NC` means consumed. The reader uses
@@ -147,12 +156,14 @@ the Roblox window and has no desktop monitor selection.
   are 20 ms held and 20 ms released, with a cap of 125 attempts. Frame scheduling
   and the executor affect the actual rate; sending a press does not prove the
   game counted it. Consecutive mash notes are distinguished by object identity.
-- **Recovery:** notices health at or below 1 on the next state check (about 100 ms),
-  or health at or below 2 when training is inactive, and starts
-  **lines menu → Respawn → confirmation**. Missing UI retains the eight-second
-  fallback. It waits at least eight seconds after confirmation, requires three
-  ready samples with health above 2, cleared cooldown, and no resting, then sends
-  a fresh Start. Missing menu controls pause with a specific status.
+- **Recovery:** notices health at or below 1 on the next state check (about 100 ms)
+  and waits for the source-confirmed death screen. It does not click behind that
+  screen. Health 2 while training is inactive starts **lines menu → Respawn →
+  confirmation** immediately; health 1 uses the same fallback only if the death
+  screen never appears within six seconds. It waits for the canvas to go away,
+  then requires three ready samples with health above 2, cleared cooldown, and no
+  resting before it sends a fresh Start. Missing menu controls pause with a
+  specific status.
 - **HTC timer:** verifies two plausible readings and extrapolates between reads.
   At 35 minutes remaining by default, it enters AFK. Unknown timers are not given
   a guessed duration. A verified countdown survives normal respawn.
@@ -217,9 +228,9 @@ status labels. Keep the feature's state, input handling, and cleanup independent
 of Chamber; adding a row does not start another scanning loop. Chamber currently
 registers one row in `Main.lua`. No keyboard binding is needed.
 
-The 89-test offline suite covers exact note names and normalized timing across
+The 90-test offline suite covers exact note names and normalized timing across
 difficulty speeds, linked doubles, 25 accepted mash inputs at 30/60 Hz, lane
-replacement, recovery order, post-respawn Start gating, repeated
+replacement, source-confirmed RespawnUI handling, recovery order, post-respawn Start gating, repeated
 reconnects, timer retention, sustained spam, cancellation and release, automatic
 recognition, event-driven discovery, pause/unload cleanup, and large GUI fixtures.
 It uses deterministic Roblox API doubles and does not render Roblox or validate
