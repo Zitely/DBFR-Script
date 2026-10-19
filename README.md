@@ -1,7 +1,7 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.2.4 has one Chamber toggle,
+orange and gold Dragon Ball themed hub. **Version 1.2.5 has one Chamber toggle,
 a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
 The hub supports additional feature rows as the project grows. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
@@ -86,6 +86,8 @@ the manual lines menu → Respawn route as soon as the training health gate is h
 It recognizes the game's `PlayerGui` button and the native top-left `CoreGui`
 hamburger button. If the Respawn entry does not appear, it scans continuously and
 reopens the menu at a short interval, for up to five attempts.
+The current Roblox overlay's exact Respawn path is preferred whenever it exists:
+`CoreGui.TopBarApp.TopBarApp.UnibarLeftFrame.UnibarMenu.SubMenuHost.nine_dot.ScrollingFrame.MainCanvas.respawn`.
 Once the game clones that canvas, Chamber stops further recovery clicks and waits
 for it to disappear and for the new character to have `AttackCheck` before
 collecting three fresh, start-ready samples.

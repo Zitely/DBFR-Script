@@ -6,6 +6,8 @@ local Bindings = {}
 Bindings.__index = Bindings
 local KINDS = {"left", "right", "q", "e"}
 local ROLES = {"start", "menu", "respawn", "confirm", "reconnect", "timer", "targetTop", "targetBottom", "counterTop", "counterBottom"}
+-- Exact live Roblox overlay control supplied from the current DBFR client.
+local CORE_RESPAWN_PATH = {"TopBarApp", "TopBarApp", "UnibarLeftFrame", "UnibarMenu", "SubMenuHost", "nine_dot", "ScrollingFrame", "MainCanvas", "respawn"}
 local ALIASES = {
     q = "q", e = "e", keyq = "q", keye = "e", qkey = "q", ekey = "e",
     lmb = "left", rmb = "right", mouse1 = "left", mouse2 = "right",
@@ -59,6 +61,13 @@ local function group() return {items = {}, positions = {}} end
 local function insert(set, object)
     if set.positions[object] then return end
     set.items[#set.items + 1], set.positions[object] = object, #set.items + 1
+end
+local function matchesCorePath(object, path)
+    for index = #path, 1, -1 do
+        if not object or object.Name ~= path[index] then return false end
+        object = object.Parent
+    end
+    return object and object.Name == "CoreGui"
 end
 local function remove(set, object)
     local position = set.positions[object]
@@ -144,7 +153,8 @@ function Bindings:classify(object, root)
     end
     local gameGui = root == "PlayerGui" or root == "CoreGui"
     if button then
-        if label == "start" then r.role = "start"
+        if root == "CoreGui" and matchesCorePath(object, CORE_RESPAWN_PATH) then r.role, r.exact = "respawn", true
+        elseif label == "start" then r.role = "start"
         elseif label == "reconnect" then r.role = "reconnect"
         elseif label == "respawn" then r.role = "respawn"
         elseif gameGui and (label == "menu" or name == "menubutton" or name == "hamburgerbutton" or name == "linesmenu") then r.role = "menu" end
@@ -237,7 +247,7 @@ function Bindings:snapshot(now)
             if visible(object, memo) and visible(r.button, memo) then
                 local role = r.role
                 local x = self:point(r.button, sx, sy)
-                if role == "respawn" and x >= 300 then role = "confirm" end
+                if role == "respawn" and not r.exact and x >= 300 then role = "confirm" end
                 controls[role] = controls[role] or r.button
             end
         end)

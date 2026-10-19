@@ -23,6 +23,18 @@ return function(test, equal, mock)
         local b = Bindings.new(mock.player)
         equal(b:snapshot(0).controls.menu, hamburger)
     end)
+    test("known Roblox overlay path takes priority for its Respawn button", function()
+        mock.reset()
+        local current = mock.coreGui
+        for _, name in ipairs({"TopBarApp", "TopBarApp", "UnibarLeftFrame", "UnibarMenu", "SubMenuHost", "nine_dot", "ScrollingFrame", "MainCanvas"}) do
+            current = mock.object("Frame", name, current)
+        end
+        local respawn = mock.object("TextButton", "respawn", current, at(640, 360))
+        local b = Bindings.new(mock.player)
+        local sample
+        for index = 0, 100 do sample = b:snapshot(index * 0.1) end
+        equal(sample.controls.respawn, respawn)
+    end)
     test("hidden controls and our own UI never trigger detection", function()
         mock.reset()
         local hidden = mock.object("Frame", "Hidden", mock.hud, {Visible = false})
@@ -130,7 +142,7 @@ return function(test, equal, mock)
     test("Chamber button controls automation independently of window shortcuts", function()
         mock.reset()
         local app = require("src.Main").start()
-        equal(app.version, "1.2.4"); equal(#app.ui.order, 1)
+        equal(app.version, "1.2.5"); equal(#app.ui.order, 1)
         local row = app.ui.features.chamber
         equal(row.state.Text, "PAUSED")
         mock.uis.InputBegan:Fire({KeyCode = Enum.KeyCode.F6}, false)
@@ -214,7 +226,7 @@ return function(test, equal, mock)
         local ok, app = pcall(function() return assert(loadfile("loader.lua"))() end)
         loadstring = compile
         assert(ok, app)
-        equal(app.version, "1.2.4"); equal(app.ui.window.Visible, true)
+        equal(app.version, "1.2.5"); equal(app.ui.window.Visible, true)
         equal(downloads, 0)
         mock.tick(); equal(app.ui.features.chamber.state.Text, "PAUSED")
         app.unload()
