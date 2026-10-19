@@ -4,8 +4,9 @@ local Rhythm = require("src.Rhythm")
 local Bindings = require("src.Bindings")
 local Input = require("src.Input")
 local UI = require("src.UI")
+local Weights = require("src.Weights")
 local Main = {}
-local VERSION = "1.2.8"
+local VERSION = "1.3.0"
 
 function Main.start()
     local env = type(getgenv) == "function" and getgenv() or _G
@@ -19,7 +20,11 @@ function Main.start()
         local ok, data = pcall(function() return http:JSONDecode(env.readfile(storage)) end)
         if ok and type(data) == "table" then saved = data end
     end
-    local config = Config.new(type(saved.config) == "table" and saved.config or {})
+    local savedConfig = type(saved.config) == "table" and saved.config or {}
+    -- Version 1 settings used 35 minutes only as the old default. Migrate that
+    -- untouched value to the requested 30-minute overnight threshold.
+    if saved.version == 1 and savedConfig.afkMinutes == 35 then savedConfig.afkMinutes = nil end
+    local config = Config.new(savedConfig)
     local ui, engine, bindings, rhythm
     local input = Input.new(env)
     local live, queueRegistered = true, false
@@ -35,7 +40,7 @@ function Main.start()
         if type(env.writefile) ~= "function" or type(env.makefolder) ~= "function" then return false end
         local ok, err = pcall(function()
             pcall(env.makefolder, "DBFR_Lua")
-            env.writefile(storage, http:JSONEncode({version = 1, config = config, bindings = bindings.saved,
+            env.writefile(storage, http:JSONEncode({version = 2, config = config, bindings = bindings.saved,
                 resumeRequested = engine.active and config.resumeAfterTeleport}))
         end)
         if not ok then log("Settings could not be saved: " .. tostring(err)) end
@@ -46,9 +51,9 @@ function Main.start()
         local released, detail = pcall(input.releaseAll, input)
         if not ok or not released then log("Input release needs attention: " .. tostring(reason or detail)) end
     end
-    local function ensureNightmare()
+    local function ensureNightmare(quiet)
         if player:GetAttribute("Difficulty") == "Nightmare" then
-            log("Nightmare difficulty already selected")
+            if not quiet then log("Nightmare difficulty already selected") end
             return true
         end
         local remote = game:GetService("ReplicatedStorage"):FindFirstChild("DifficultySet")
@@ -179,8 +184,21 @@ end)
                         if action.kind == "respawnShortcut" then
                             succeeded, detail = pcall(input.respawnShortcut, input, config, valid)
                         else
-                            local target = snapshot.controls[action.kind]
-                            succeeded, detail = pcall(input.click, input, target, config, valid, action.kind == "start")
+                            local ready = true
+                            if action.kind == "start" then
+                                ready = ensureNightmare(true)
+                                if ready then
+                                    local found, equipped, name = pcall(Weights.equipBest, player)
+                                    if found and equipped then log("Equipped " .. name .. " before training")
+                                    elseif not found then log("Weight check failed: " .. tostring(equipped)) end
+                                else detail = "Nightmare difficulty was not selected" end
+                            end
+                            if ready then
+                                local target = snapshot.controls[action.kind]
+                                succeeded, detail = pcall(input.click, input, target, config, valid, action.kind == "start")
+                            else
+                                succeeded = false
+                            end
                         end
                         engine:complete(action, succeeded, os.clock(), detail)
                         actionRunning = false

@@ -2,7 +2,7 @@ local Config = {}
 
 Config.defaults = {
     timingOffsetMs = -40, holdMs = 38, spamHoldMs = 20, spamGapMs = 20,
-    spamMaxPresses = 125, afkMinutes = 35, lostSeconds = 8,
+    spamMaxPresses = 125, afkMinutes = 30, afkDurationMinutes = 20, lostSeconds = 8,
     respawnWait = 8, respawnTimeout = 45, startGrace = 8,
     reconnectCooldown = 9, reconnectPoll = 2, reconnectAttempts = 3,
     loadWait = 7, loadTimeout = 150, startAttempts = 3, recoveryAttempts = 5,
@@ -16,6 +16,7 @@ Config.defaults = {
 Config.ranges = {
     timingOffsetMs = {-250, 250}, holdMs = {10, 150}, spamHoldMs = {10, 100},
     spamGapMs = {10, 200}, spamMaxPresses = {25, 250}, afkMinutes = {0, 119},
+    afkDurationMinutes = {1, 60},
     lostSeconds = {3, 60}, respawnWait = {3, 30}, respawnTimeout = {30, 120},
     startGrace = {3, 30}, reconnectCooldown = {3, 60}, reconnectPoll = {0.5, 10},
     reconnectAttempts = {1, 10}, loadWait = {3, 30}, loadTimeout = {30, 300},

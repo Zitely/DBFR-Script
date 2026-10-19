@@ -77,7 +77,10 @@ function Engine:step(s, now)
         self.timer:observe(s.timer, now)
         self.nextTimer = now + 1.2
     end
-    -- Disconnects have priority in every active state, including respawn and AFK.
+    -- During the overnight idle window, do not refresh or click Roblox's
+    -- Reconnect dialog early. The game must receive the full idle interval.
+    if self.state == "afk" and now < (self.afkUntil or math.huge) then return nil end
+    -- Disconnects have priority in every active state once the AFK interval ends.
     if now >= self.nextModal then
         self.nextModal = now + c.reconnectPoll
         self.modalFrames = s.reconnect and self.modalFrames + 1 or 0
@@ -114,7 +117,14 @@ function Engine:step(s, now)
         self:halt(now, "The hub did not become ready")
         return nil
     end
-    if self.state == "afk" then return nil end
+    if self.state == "afk" then
+        if not self.afkComplete then
+            self.afkComplete = true
+            self.status = "AFK interval complete; waiting for the Reconnect button"
+            self.log(self.status)
+        end
+        return nil
+    end
     -- RespawnLocal creates PlayerGui.RespawnUI.RespawnCanvas on Humanoid.Died
     -- and removes it only after the new character has AttackCheck. It is an
     -- exact signal, so never keep clicking recovery controls through it.
@@ -124,7 +134,9 @@ function Engine:step(s, now)
     end
     local remaining = self.timer:remaining(now)
     if remaining and remaining <= c.afkMinutes * 60 and c.afkMinutes > 0 then
-        self:transition("afk", now, "HTC threshold reached; waiting for the Reconnect button")
+        self.afkUntil, self.afkComplete = now + c.afkDurationMinutes * 60, false
+        self:transition("afk", now, "HTC has " .. c.afkMinutes .. " minutes left; staying idle for "
+            .. c.afkDurationMinutes .. " minutes")
         return nil
     end
     if self.state == "respawn_menu" then

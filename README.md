@@ -1,7 +1,7 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.2.8 has one Chamber toggle,
+orange and gold Dragon Ball themed hub. **Version 1.3.0 has one Chamber toggle,
 a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
 The hub supports additional feature rows as the project grows. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
@@ -164,17 +164,20 @@ the Roblox window and has no desktop monitor selection.
   and the executor affect the actual rate; sending a press does not prove the
   game counted it. Consecutive mash notes are distinguished by object identity.
 - **Recovery:** notices health at or below 2 while training is inactive on the
-  next state check (about 100 ms) and immediately starts **lines menu → Respawn →
-  confirmation**. Once the game produces its source-confirmed RespawnUI canvas,
+  next state check (about 100 ms), sends **Escape → R**, and clicks the visible
+  Respawn confirmation. Once the game produces its source-confirmed RespawnUI canvas,
   it waits for that canvas to go away, then requires three ready samples with
   health above 2, cleared cooldown, and no resting before it sends a fresh Start.
-  Missing menu controls pause with a specific status.
+- **Nightmare and weights:** before every Start, Chamber verifies Nightmare is
+  selected, then equips the strongest available **Heavy**, **Medium**, or **Light
+  Weights** tool. It does not start the round if Nightmare cannot be selected.
 - **HTC timer:** verifies two plausible readings and extrapolates between reads.
-  At 35 minutes remaining by default, it enters AFK. Unknown timers are not given
-  a guessed duration. A verified countdown survives normal respawn.
-- **Reconnect:** watches throughout active training, recovery, startup, and AFK.
-  It checks every two seconds, confirms two observations, approaches smoothly,
-  hovers, and clicks. It allows three attempts with a nine-second cooldown after
+  At **30 minutes remaining** by default, it stops all input for **20 minutes**.
+  Unknown timers are not given a guessed duration. A verified countdown survives
+  normal respawn.
+- **Overnight reconnect:** after that AFK interval, it resumes looking for the
+  Reconnect button, confirms two observations, approaches smoothly, hovers, and
+  clicks. It allows three attempts with a nine-second cooldown after
   each click, waits seven seconds after the hub returns, and starts again. Retry
   counts reset for later disconnects. Reconnecting clears the old session timer.
 - **Off:** cancels pending actions, releases inputs, and stops discovery. Errors
@@ -183,7 +186,8 @@ the Roblox window and has no desktop monitor selection.
 
 Defaults live in `src/Config.lua`; previous configuration remains readable from
 `DBFR_Lua/settings.json` when executor file functions are available. There is no
-settings page. AFK intentionally stops input until Reconnect appears.
+settings page. AFK intentionally stops input for the full configured interval
+before it acts on Reconnect.
 
 ## Executor compatibility
 

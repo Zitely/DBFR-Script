@@ -89,6 +89,9 @@ function methods:WaitForChild(name) return assert(self:FindFirstChild(name), "Mi
 function methods:FindFirstChildOfClass(class)
     for _, child in ipairs(self.children) do if child:IsA(class) then return child end end
 end
+function methods:EquipTool(tool)
+    tool.Parent = self.Parent
+end
 function methods:FindFirstAncestorWhichIsA(class)
     local parent = self.Parent
     while parent do if parent:IsA(class) then return parent end; parent = parent.Parent end
