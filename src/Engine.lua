@@ -37,7 +37,6 @@ function Engine:action(kind, now)
 end
 function Engine:waitForRespawn(now, message, readyAfter)
     self.requiresStart, self.fresh, self.mayAdopt = true, 0, false
-    self.downSince = nil
     self:transition("respawning", now, message)
     self.readyAfter = readyAfter
 end
@@ -148,17 +147,6 @@ function Engine:step(s, now)
     end
     -- The game's health gate is independent of whether icon names are known.
     -- Handle it before a still-visible Start can consume the retry budget.
-    if s.trainingKnown and s.down then
-        self.fresh = 0
-        if s.respawnCanvas then return nil end
-        if self.state ~= "waiting_respawn_ui" then
-            self.downSince = now
-            self:transition("waiting_respawn_ui", now, "Character down; waiting for the game's respawn screen")
-        end
-        -- RespawnLocal fades its canvas in after five seconds. Give it a small
-        -- margin before attempting the user's manual lines-menu fallback.
-        if not s.needsRecovery or now - (self.downSince or now) < c.respawnUiWait then return nil end
-    end
     if s.trainingKnown and s.needsRecovery then
         self.fresh = 0
         if not c.autoRecover or c.dryRun then self.status = s.startBlocked; return nil end

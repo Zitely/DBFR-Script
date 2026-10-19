@@ -29,7 +29,7 @@ function GameState.read(playerGui, health, visible, memo)
     elseif resting then blocked = "Waiting for resting to finish"
     elseif cooldown then blocked = "Waiting for the training cooldown" end
     return {training = training, active = active, canStart = canStart, needsRecovery = needsRecovery,
-        down = health ~= nil and health <= 1, respawnCanvas = respawnCanvas ~= nil,
+        respawnCanvas = respawnCanvas ~= nil,
         attack = child(frame, "Attack"), block = child(frame, "Block"),
         counterA = child(frame, "CounterA"), counterB = child(frame, "CounterB"),
         blocked = blocked, start = not active and visible(start, memo) and start or nil}

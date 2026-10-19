@@ -111,8 +111,8 @@ end)
     ui = UI.new(parent, unload)
     ui:addFeature("chamber", "CHAMBER AUTO TRAIN", toggle)
     bindings = Bindings.new(player, saved.bindings, ui.gui)
-    env.__DBFR_APP = {unload = unload, toggle = toggle, version = "1.2.1", ui = ui, scanner = bindings}
-    log("Chamber 1.2.1 loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
+    env.__DBFR_APP = {unload = unload, toggle = toggle, version = "1.2.2", ui = ui, scanner = bindings}
+    log("Chamber 1.2.2 loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
     log(input:description())
     if type(env.writefile) ~= "function" then log("File storage unavailable: settings last for this session only") end
     ui:updateFeature("chamber", engine, rhythm, os.clock())

@@ -335,7 +335,7 @@ function Bindings:snapshot(now)
         alive = health ~= nil and health > 0, bindingsReady = ready, training = training,
         trainingKnown = state ~= nil, gameActive = state and state.active,
         startAllowed = not state or state.canStart, needsRecovery = state and state.needsRecovery,
-        down = state and state.down, respawnCanvas = state and state.respawnCanvas,
+        respawnCanvas = state and state.respawnCanvas,
         startBlocked = state and state.blocked,
         notes = filtered, challenge = challenge, controls = controls}
 end
