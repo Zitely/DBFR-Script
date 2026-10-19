@@ -7,6 +7,7 @@ Config.defaults = {
     reconnectCooldown = 9, reconnectPoll = 2, reconnectAttempts = 3,
     loadWait = 7, loadTimeout = 150, startAttempts = 3, recoveryAttempts = 5,
     recoveryMenuWait = 3, recoveryRetryDelay = 1,
+    shortcutHoldMs = 45, respawnShortcutDelayMs = 350,
     approachMs = 900, hoverMs = 180, clickHoldMs = 90,
     autoReconnect = true, autoRecover = true, autoStart = true,
     dryRun = false, resumeAfterTeleport = false,
@@ -19,7 +20,8 @@ Config.ranges = {
     startGrace = {3, 30}, reconnectCooldown = {3, 60}, reconnectPoll = {0.5, 10},
     reconnectAttempts = {1, 10}, loadWait = {3, 30}, loadTimeout = {30, 300},
     startAttempts = {1, 10}, recoveryAttempts = {1, 5}, recoveryMenuWait = {1, 10},
-    recoveryRetryDelay = {0.5, 10}, approachMs = {200, 2000},
+    recoveryRetryDelay = {0.5, 10}, shortcutHoldMs = {30, 300},
+    respawnShortcutDelayMs = {100, 2000}, approachMs = {200, 2000},
     hoverMs = {50, 1000}, clickHoldMs = {30, 300},
 }
 

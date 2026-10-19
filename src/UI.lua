@@ -26,7 +26,7 @@ end
 local function set(object, key, value)
     if object[key] ~= value then object[key] = value end
 end
-function UI.new(parent, onClose)
+function UI.new(parent, onClose, version)
     local self = setmetatable({features = {}, order = {}, connections = {}, minimized = false}, UI)
     self.gui = new("ScreenGui", parent, {Name = "DBFR_SaiyanControl", ResetOnSpawn = false,
         IgnoreGuiInset = true, DisplayOrder = 10000, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
@@ -53,6 +53,10 @@ function UI.new(parent, onClose)
     end
     self.minimizeButton = windowButton("−", 273, C.gold)
     self.closeButton = windowButton("×", 307, C.orange)
+    self.versionLabel = label(self.window, "v" .. tostring(version or "?"), 0, 0, 70, 14, 9, C.muted, true)
+    self.versionLabel.AnchorPoint = Vector2.new(1, 1)
+    self.versionLabel.Position = UDim2.new(1, -13, 1, -8)
+    self.versionLabel.TextXAlignment = Enum.TextXAlignment.Right
     self.connections[#self.connections + 1] = self.minimizeButton.Activated:Connect(function()
         self:setMinimized(not self.minimized)
     end)

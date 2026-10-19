@@ -55,6 +55,9 @@ function Engine:complete(action, ok, now, reason)
     elseif action.kind == "menu" then
         self.mayAdopt = false
         self:transition("respawn_menu", now, "Waiting for the menu's Respawn entry")
+    elseif action.kind == "respawnShortcut" then
+        self.mayAdopt = false
+        self:transition("respawn_confirm", now, "Sent Escape then R; waiting for the Respawn confirmation")
     elseif action.kind == "respawn" then
         self:transition("respawn_confirm", now, "Waiting for the Respawn confirmation")
     elseif action.kind == "confirm" then
@@ -158,13 +161,10 @@ function Engine:step(s, now)
         if not c.autoRecover or c.dryRun then self.status = s.startBlocked; return nil end
         if self.recoveryCount >= c.recoveryAttempts then
             self:halt(now, "Recovery retry limit reached")
-        elseif s.menu and now >= (self.nextRecovery or 0) then
+        elseif now >= (self.nextRecovery or 0) then
             self.recoveryCount = self.recoveryCount + 1
             self.requiresStart = true
-            return self:action("menu", now)
-        else
-            if self.state ~= "lost" then self:transition("lost", now, "Health too low; looking for the lines menu") end
-            if now - self.since > 4 then self.status = "Health too low; still looking for the lines menu" end
+            return self:action("respawnShortcut", now)
         end
         return nil
     end

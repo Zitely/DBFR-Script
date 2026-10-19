@@ -1,7 +1,7 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.2.6 has one Chamber toggle,
+orange and gold Dragon Ball themed hub. **Version 1.2.7 has one Chamber toggle,
 a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
 The hub supports additional feature rows as the project grows. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
@@ -28,7 +28,7 @@ counters using the game controller and Minigame module supplied by the user.
 Hiding or minimizing keeps Chamber running if it is on. Use its feature toggle
 to pause, or × to exit. Execute the full script again to reopen after exiting.
 
-The panel displays the current action and bottom-right HTC timer. Fresh execution
+The panel displays its version, current action, and bottom-right HTC timer. Fresh execution
 starts with Chamber off. Running the script again unloads its previous instance,
 releases held inputs, and disconnects the old loop before creating the new panel.
 Turning Chamber on during an existing minigame adopts it after three observations
@@ -86,14 +86,10 @@ health above 2, `Main.UICoolDown` false, and
 `Characters.Interactions.Resting` false. These values are read, never rewritten.
 
 The supplied `PlayerScripts.RespawnLocal` script creates
-`PlayerGui.RespawnUI.RespawnCanvas` whenever the Humanoid dies. Chamber requests
-the manual lines menu → Respawn route as soon as the training health gate is hit.
-It recognizes the game's `PlayerGui` button and the native top-left `CoreGui`
-hamburger button using its fixed screen-pixel position. If the Respawn entry does not appear, it scans continuously and
-reopens the menu at a short interval, for up to five attempts.
-The current Roblox overlay's exact Respawn path is preferred whenever it exists:
-`CoreGui.TopBarApp.TopBarApp.UnibarLeftFrame.UnibarMenu.SubMenuHost.nine_dot.ScrollingFrame.MainCanvas.respawn`.
-Once the game clones that canvas, Chamber stops further recovery clicks and waits
+`PlayerGui.RespawnUI.RespawnCanvas` whenever the Humanoid dies. When the training
+health gate is hit, Chamber sends Roblox's built-in **Escape → R** respawn shortcut,
+then clicks the visible Respawn confirmation. Once the game clones that canvas,
+Chamber stops further recovery input and waits
 for it to disappear and for the new character to have `AttackCheck` before
 collecting three fresh, start-ready samples.
 
@@ -104,10 +100,9 @@ notes reference their partner through `Obj.Value`. A top-level `mash` note names
 its input in the `Key` attribute and uses `CounterA` or `CounterB`; nested visual
 copies and the templates under `Frame.Keys` are ignored.
 
-The lines menu still uses its name or reference layout; Respawn, confirmation,
-Reconnect, and HTC timer use visible text and layout. Exact recovery-menu paths
-have not yet been supplied, so menu recognition still needs an in-game check.
-Older HUDs retain the generic label/name/attribute and learned-image fallback.
+Reconnect and HTC timer use visible text and layout. The native menu route remains
+available as a fallback for a disappeared training UI. Older HUDs retain the generic
+label/name/attribute and learned-image fallback.
 There is no binding page or calibration step.
 
 ### Capture an unrecognized minigame

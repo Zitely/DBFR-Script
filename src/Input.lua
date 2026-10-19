@@ -1,4 +1,6 @@
 local Bindings = require("src.Bindings")
+local KEY_CODES = {q = 0x51, e = 0x45, r = 0x52, escape = 0x1B}
+local KEY_ENUMS = {q = Enum.KeyCode.Q, e = Enum.KeyCode.E, r = Enum.KeyCode.R, escape = Enum.KeyCode.Escape}
 local Input = {}
 Input.__index = Input
 function Input.new(env)
@@ -46,10 +48,10 @@ function Input:event(kind, down)
             local pos = self:position()
             self.vim:SendMouseButtonEvent(pos.X, pos.Y, kind == "left" and 0 or 1, down, game, 0)
         else error("Executor does not provide mouse input") end
-    elseif kind == "q" or kind == "e" then
+    elseif KEY_CODES[kind] then
         if self.nativeKeyboard then
-            (down and self.env.keypress or self.env.keyrelease)(kind == "q" and 0x51 or 0x45)
-        elseif self.vim then self.vim:SendKeyEvent(down, kind == "q" and Enum.KeyCode.Q or Enum.KeyCode.E, false, game)
+            (down and self.env.keypress or self.env.keyrelease)(KEY_CODES[kind])
+        elseif self.vim then self.vim:SendKeyEvent(down, KEY_ENUMS[kind], false, game)
         else error("Executor does not provide key input") end
     else error("Unsupported input: " .. tostring(kind)) end
 end
@@ -75,6 +77,18 @@ local function waitUntil(duration, valid)
         if not valid() then error("Action cancelled") end
         task.wait()
     until os.clock() >= deadline
+end
+function Input:tap(kind, duration, valid)
+    self:down(kind)
+    local ok, reason = pcall(waitUntil, duration, valid)
+    local released, releaseReason = pcall(self.up, self, kind)
+    if not released then error(releaseReason) end
+    if not ok then error(reason) end
+end
+function Input:respawnShortcut(config, valid)
+    self:tap("escape", config.shortcutHoldMs / 1000, valid)
+    waitUntil(config.respawnShortcutDelayMs / 1000, valid)
+    self:tap("r", config.shortcutHoldMs / 1000, valid)
 end
 function Input:click(target, config, valid, park)
     if not Bindings.visible(target) then error("Target disappeared") end

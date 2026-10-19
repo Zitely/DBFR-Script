@@ -5,6 +5,7 @@ local Bindings = require("src.Bindings")
 local Input = require("src.Input")
 local UI = require("src.UI")
 local Main = {}
+local VERSION = "1.2.7"
 
 function Main.start()
     local env = type(getgenv) == "function" and getgenv() or _G
@@ -108,11 +109,11 @@ end)
         if ok then parent = result end
     end
     parent = parent or player:WaitForChild("PlayerGui")
-    ui = UI.new(parent, unload)
+    ui = UI.new(parent, unload, VERSION)
     ui:addFeature("chamber", "CHAMBER AUTO TRAIN", toggle)
     bindings = Bindings.new(player, saved.bindings, ui.gui)
-    env.__DBFR_APP = {unload = unload, toggle = toggle, version = "1.2.6", ui = ui, scanner = bindings}
-    log("Chamber 1.2.6 loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
+    env.__DBFR_APP = {unload = unload, toggle = toggle, version = VERSION, ui = ui, scanner = bindings}
+    log("Chamber " .. VERSION .. " loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
     log(input:description())
     if type(env.writefile) ~= "function" then log("File storage unavailable: settings last for this session only") end
     ui:updateFeature("chamber", engine, rhythm, os.clock())
@@ -142,11 +143,15 @@ end)
                 if action and not actionRunning then
                     actionRunning = true
                     release()
-                    local target = snapshot.controls[action.kind]
                     task.spawn(function()
-                        local succeeded, detail = pcall(input.click, input, target, config,
-                            function() return live and engine.active and engine.generation == action.generation end,
-                            action.kind == "start")
+                        local valid = function() return live and engine.active and engine.generation == action.generation end
+                        local succeeded, detail
+                        if action.kind == "respawnShortcut" then
+                            succeeded, detail = pcall(input.respawnShortcut, input, config, valid)
+                        else
+                            local target = snapshot.controls[action.kind]
+                            succeeded, detail = pcall(input.click, input, target, config, valid, action.kind == "start")
+                        end
                         engine:complete(action, succeeded, os.clock(), detail)
                         actionRunning = false
                         if live then
