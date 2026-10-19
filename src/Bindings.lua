@@ -257,6 +257,10 @@ function Bindings:snapshot(now)
     local character = self.player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
     local health = humanoid and humanoid.Health
+    -- RespawnLocal waits for this exact child before removing its death canvas.
+    -- Keep it in the snapshot so recovery cannot restart training while the new
+    -- character is still being initialized.
+    local characterReady = character and character:FindFirstChild("AttackCheck") ~= nil or false
     local state = GameState.read(self.roots.PlayerGui, health, visible, memo)
     if state then controls.start = state.start end
     local notes, counters, nearest, filtered = {}, {}, {}, {}
@@ -336,6 +340,7 @@ function Bindings:snapshot(now)
         trainingKnown = state ~= nil, gameActive = state and state.active,
         startAllowed = not state or state.canStart, needsRecovery = state and state.needsRecovery,
         respawnCanvas = state and state.respawnCanvas,
+        characterReady = characterReady,
         startBlocked = state and state.blocked,
         notes = filtered, challenge = challenge, controls = controls}
 end

@@ -16,15 +16,17 @@ return function(test, equal, mock)
         local resting = mock.object("BoolValue", "Resting", interactions, {Value = false})
         local menu = mock.object("ScreenGui", "Menu", mock.playerGui)
         mock.object("ImageButton", "MenuButton", menu)
+        local attackCheck = mock.object("Folder", "AttackCheck", mock.character)
         local b = Bindings.new(mock.player)
         local e = Engine.new(Config.new()); e:setActive(true, 0)
         return {main = main, active = active, cooldown = cooldown, frame = frame,
-            start = start, startGui = startGui, resting = resting, b = b, e = e}
+            start = start, startGui = startGui, resting = resting, attackCheck = attackCheck, b = b, e = e}
     end
     test("DBFR flags and exact Start path override generic labels and legacy scenery", function()
         local f = fixture()
         local s = f.b:snapshot(0)
         equal(s.trainingKnown, true); equal(s.start, true); equal(s.controls.start, f.start)
+        equal(s.characterReady, true)
         equal(s.training, false); equal(s.startAllowed, true)
         f.active.Value, f.frame.Visible = true, true
         s = f.b:snapshot(0.01)
@@ -120,9 +122,14 @@ return function(test, equal, mock)
         equal(f.e.state, "respawning")
         canvas.Parent = nil
         mock.humanoid.Health = 100
-        for _, at in ipairs({8.1, 8.2, 8.3}) do equal(f.e:step(f.b:snapshot(at), at), nil) end
+        f.attackCheck:Destroy()
+        equal(f.b:snapshot(8.1).characterReady, false)
+        equal(f.e:step(f.b:snapshot(8.1), 8.1), nil)
+        equal(f.e.state, "respawning")
+        f.attackCheck = mock.object("Folder", "AttackCheck", mock.character)
+        for _, at in ipairs({8.2, 8.3, 8.4}) do equal(f.e:step(f.b:snapshot(at), at), nil) end
         equal(f.e.state, "seeking"); equal(f.e.requiresStart, true)
-        local action = f.e:step(f.b:snapshot(8.4), 8.4)
+        local action = f.e:step(f.b:snapshot(8.5), 8.5)
         equal(action.kind, "start")
         f.b:pause()
     end)

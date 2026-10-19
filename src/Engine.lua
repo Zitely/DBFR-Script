@@ -135,6 +135,9 @@ function Engine:step(s, now)
     elseif self.state == "respawning" then
         if now - self.since > c.respawnTimeout then
             self:halt(now, "Respawn loading timed out")
+        elseif not s.respawnCanvas and s.characterReady == false then
+            self.fresh = 0
+            self.status = "Waiting for the new character to finish loading"
         elseif not s.respawnCanvas and now >= self.readyAfter and s.alive and s.start
             and not s.confirm and s.startAllowed ~= false then
             self.fresh = self.fresh + 1
