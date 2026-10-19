@@ -9,9 +9,14 @@ counters using the game controller and Minigame module supplied by the user.
 
 ## Run
 
-1. Sign into GitHub, open **[`loader.lua`](loader.lua)**, and choose **Copy raw file**.
-2. Replace the **entire contents** of your executor tab with that code and execute it.
-3. At the game's training hub, click **CHAMBER AUTO TRAIN** to turn automation on.
+1. Paste this into your executor and run it:
+
+   ```lua
+   loadstring(game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/http_loader.lua"))()
+   ```
+
+   It downloads the current Chamber build from `main` every time you execute it.
+2. At the game's training hub, click **CHAMBER AUTO TRAIN** to turn automation on.
    Click the same button again to stop. Drag the header to move the panel.
 
 | Window control | Action |
@@ -40,9 +45,9 @@ first line is:
 ```
 
 They need no HTTP request, `loadstring`, Python, or downloaded UI library to start.
-The repository is private: an executor cannot use your browser's GitHub sign-in.
-The optional [`http_loader.lua`](http_loader.lua) is for publicly readable
-repositories only; it cannot download this private repository unauthenticated.
+[`http_loader.lua`](http_loader.lua) is the public one-line updater above. It
+downloads `dist/chamber.lua`, validates the response before compiling it, and
+caches the complete bundle in the executor workspace when file APIs are available.
 
 If you see `Chamber download failed`, `404`, or an error from the old one-line
 launcher, replace that launcher with the complete `loader.lua` above. For an error

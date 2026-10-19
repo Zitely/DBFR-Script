@@ -1,4 +1,4 @@
--- Optional HTTP downloader for a public repository. For private repos, paste loader.lua.
+-- Downloads the current public Chamber bundle from GitHub.
 local url = "https://raw.githubusercontent.com/Zitely/DBFR-Script/main/dist/chamber.lua"
 local env = _G
 if type(getgenv) == "function" then
