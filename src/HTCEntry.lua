@@ -1,4 +1,4 @@
--- Manual HTC entry from the supplied hub. This does not run a training cycle.
+-- Shared HTC cooldown/fee entry operation; callers own the training cycle.
 local HTCEntry = {}
 HTCEntry.__index = HTCEntry
 local PLACE_ID, FEE = 4178935231, 60000
@@ -8,7 +8,7 @@ task.spawn(function()
     local env = type(getgenv) == "function" and getgenv() or _G
     local compile = loadstring or env.loadstring
     if type(compile) ~= "function" then warn("Saiyan Hub: reload requires loadstring"); return end
-    local source = game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/http_loader.lua")
+    local source = game:HttpGet("https://raw.githubusercontent.com/Zitely/DBFR-Script/main/http_loader.lua?t=" .. tostring(os.time()))
     assert(compile(source, "Saiyan Hub loader"))()
 end)
 ]]
@@ -17,9 +17,9 @@ local function remote(parent, name, class)
     assert(object and object:IsA(class), "Missing " .. name .. " " .. class)
     return object
 end
-function HTCEntry.new(player, allowed, status, env)
+function HTCEntry.new(player, allowed, status, env, options)
     return setmetatable({player = player, allowed = allowed, status = status, env = env or {},
-        live = true, generation = 0, nextAttempt = 0}, HTCEntry)
+        options = options or {}, live = true, generation = 0, nextAttempt = 0}, HTCEntry)
 end
 function HTCEntry:valid(generation, character)
     local hum = character and character:FindFirstChildOfClass("Humanoid")
@@ -34,6 +34,7 @@ function HTCEntry:cancel()
     end
 end
 function HTCEntry:queueReload()
+    if self.options.prepare then return self.options.prepare() end
     if self.reloadQueued then return true end
     local env = self.env
     local queue = env.queue_on_teleport or env.queueonteleport
@@ -66,6 +67,7 @@ function HTCEntry:request()
                     if self.live and self.pendingTeleport and player == self.player and placeId == PLACE_ID then
                         self.pendingTeleport, self.nextAttempt = false, 0
                         self.status("Teleport failed: " .. tostring(detail) .. (self.feeRequested and "; retry will not resend fee" or ""))
+                        if self.options.failed then self.options.failed(detail, true) end
                     end
                 end)
             end
@@ -74,6 +76,10 @@ function HTCEntry:request()
             if not self:valid(generation, character) then return end
             assert(type(remaining) == "number" and remaining == remaining and remaining >= 0
                 and remaining < math.huge, "HTC cooldown could not be read")
+            -- Automatic travel must persist its next hop before any fee is sent.
+            local reload
+            if self.options.prepare then reload = self:queueReload() end
+            if not self:valid(generation, character) then return end
             if remaining > 0 then
                 -- Validate both controls before sending a payment. A failed or
                 -- cancelled request may still reach the server, so never repeat
@@ -95,20 +101,24 @@ function HTCEntry:request()
                 task.wait(0.2)
                 if not self:valid(generation, character) then return end
             end
-            local reload = self:queueReload()
+            if reload == nil then reload = self:queueReload() end
             if not self:valid(generation, character) then return end
             self.pendingTeleport, self.nextAttempt = true, os.clock() + 10
             self.status(reload and "Entering HTC; hub reload queued" or "Entering HTC; run your loader after joining")
+            if self.options.sent then self.options.sent() end
             teleport:Teleport(PLACE_ID, self.player)
         end)
         self.busy = false
         if not self.live then return end
         if not ok and not self.cancelled then
+            local transportFailure = self.pendingTeleport == true
             self.pendingTeleport = false
             self.nextAttempt = os.clock() + 1
             self.status("Entry failed: " .. tostring(reason) .. (self.feeRequested and "; fee will not be resent" or ""))
+            if self.options.failed then self.options.failed(reason, transportFailure) end
         elseif not self.pendingTeleport and not self:valid(generation, character) then
             self.status(self.feeRequested and "Entry cancelled; fee may already be charged" or "Entry cancelled")
+            if self.options.failed then self.options.failed("Character changed or entry was cancelled", false) end
         end
     end)
 end

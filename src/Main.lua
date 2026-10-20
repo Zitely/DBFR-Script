@@ -7,11 +7,15 @@ local UI = require("src.UI")
 local Weights = require("src.Weights")
 local Respawn = require("src.Respawn")
 local Features = require("src.Features")
+local TeleportResume = require("src.TeleportResume")
+local Overnight = require("src.Overnight")
 local Main = {}
-local VERSION = "1.5.1"
+local VERSION = "1.6.0"
 
 function Main.start()
     local env = type(getgenv) == "function" and getgenv() or _G
+    local arrival = env.__DBFR_TELEPORT_RESUME
+    env.__DBFR_TELEPORT_RESUME, env.__DBFR_AUTORESUME = nil, nil
     if env.__DBFR_APP then env.__DBFR_APP.unload() end
     local player = game:GetService("Players").LocalPlayer
     assert(player, "Run Chamber from the local Roblox client")
@@ -23,13 +27,12 @@ function Main.start()
         if ok and type(data) == "table" then saved = data end
     end
     local savedConfig = type(saved.config) == "table" and saved.config or {}
-    -- Version 1 settings used 35 minutes only as the old default. Migrate that
-    -- untouched value to the requested 30-minute overnight threshold.
-    if saved.version == 1 and savedConfig.afkMinutes == 35 then savedConfig.afkMinutes = nil end
+    -- Removed AFK/resume flags are intentionally ignored by Config.new.
     local config = Config.new(savedConfig)
-    local ui, engine, bindings, rhythm, features
+    local ui, engine, bindings, rhythm, features, cycle
+    local session = TeleportResume.new(env, player)
     local input = Input.new(env)
-    local live, queueRegistered = true, false
+    local live = true
     local actionRunning, nextEngine, nextUI, nextHealthCheck, lastTick = false, 0, 0, 0, -math.huge
     local hubSettingsDirty, nextSettingsSave = false, 0
     local wasPlaying = false
@@ -43,9 +46,8 @@ function Main.start()
         if type(env.writefile) ~= "function" or type(env.makefolder) ~= "function" then return false end
         local ok, err = pcall(function()
             pcall(env.makefolder, "DBFR_Lua")
-            env.writefile(storage, http:JSONEncode({version = 2, config = config, bindings = bindings.saved,
-                hub = features and features.values or {},
-                resumeRequested = engine.active and config.resumeAfterTeleport}))
+            env.writefile(storage, http:JSONEncode({version = 3, config = config, bindings = bindings.saved,
+                hub = features and features.values or {}}))
         end)
         if not ok then log("Settings could not be saved: " .. tostring(err)) end
         return ok
@@ -78,36 +80,9 @@ function Main.start()
         log("Nightmare difficulty could not be selected: " .. tostring(reason))
         return false
     end
-    local function registerQueue()
-        if not config.resumeAfterTeleport or queueRegistered then return end
-        local queue = env.queue_on_teleport or env.queueonteleport
-            or (type(env.syn) == "table" and env.syn.queue_on_teleport)
-        if type(queue) ~= "function" then log("This executor has no teleport queue; reload after joining manually"); return end
-        if type(env.readfile) ~= "function" then log("Teleport reload requires the loader and executor file storage"); return end
-        local hasSource, source = pcall(env.readfile, "DBFR_Lua/chamber.lua")
-        if not hasSource or type(source) ~= "string" or #source < 100 then
-            log("Save the full loader.lua file as DBFR_Lua/chamber.lua in your executor workspace before enabling teleport reload")
-            return
-        end
-        local ok, err = pcall(queue, [[
-task.spawn(function()
-    if not game:IsLoaded() then game.Loaded:Wait() end
-    local env = type(getgenv) == "function" and getgenv() or _G
-    local ok, saved = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(readfile("DBFR_Lua/settings.json"))
-    end)
-    if ok and saved.resumeRequested and saved.config and saved.config.resumeAfterTeleport then
-        env.__DBFR_AUTORESUME = true
-        local source = readfile("DBFR_Lua/chamber.lua")
-        assert(loadstring(source, "DBFR Chamber"))()
-    end
-end)
-]])
-        if ok then queueRegistered = true; log("Teleport reload queued; executor must reattach to the next client")
-        else log("Teleport queue failed: " .. tostring(err)) end
-    end
     local function stop()
         engine:setActive(false, os.clock())
+        if cycle then cycle:cancel() end
         if features then features:sync() end
         release()
         bindings:pause()
@@ -123,14 +98,16 @@ end)
             bindings.lastKinds, bindings.activeChallenge = {}, nil
             engine:setActive(true, os.clock())
             if features then features:sync() end
-            ensureNightmare()
-            save(); registerQueue()
+            if game.PlaceId == session.earthPlaceId and not config.dryRun then cycle:resume("earth")
+            else ensureNightmare() end
+            save()
             ui:updateFeature("chamber", engine, rhythm, os.clock())
         end
     end
     local function unload()
         if not live then return end
         stop(); live = false
+        if cycle then cycle:destroy() end
         if features then features:destroy() end
         for _, connection in ipairs(connections) do connection:Disconnect() end
         if ui then ui:destroy() end
@@ -151,7 +128,12 @@ end)
     features = Features.new(player, ui, function() return engine.active or actionRunning end, saved.hub, function(id, kind)
         if id == "meditate" and not engine.active then release(); bindings:pause(); wasPlaying = false end
         if kind == "slider" then hubSettingsDirty = true end
-    end, env)
+    end, env, session)
+    cycle = Overnight.new(player, engine, config, session, env, function(reason)
+        engine:halt(os.clock(), reason)
+        release(); bindings:pause(); wasPlaying = false
+        save(); ui:updateFeature("chamber", engine, rhythm, os.clock())
+    end)
     env.__DBFR_APP = {unload = unload, toggle = toggle, version = VERSION, ui = ui, scanner = bindings, features = features}
     log("Chamber " .. VERSION .. " loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
     log(input:description())
@@ -160,7 +142,7 @@ end)
     connections[#connections + 1] = player.CharacterAdded:Connect(function()
         task.spawn(function()
             task.wait(1)
-            if live and engine.active then ensureNightmare() end
+            if live and engine.active and not cycle:active() then ensureNightmare() end
         end)
     end)
     local snapshot = {notes = {}, training = false}
@@ -192,6 +174,13 @@ end)
             return
         end
         local ok, reason = pcall(function()
+            if cycle:active() then
+                if cycle.phase == "htc_loading" then snapshot = bindings:snapshot(now) end
+                if cycle:step(now, snapshot) then
+                    if now >= nextUI then nextUI = now + 0.4; ui:updateFeature("chamber", engine, rhythm, now) end
+                    return
+                end
+            end
             -- Monitor at the requested 50 ms interval. A direct reset is much
             -- faster and more reliable than navigating Roblox's respawn menu.
             if config.autoRecover and not config.dryRun and now >= nextHealthCheck then
@@ -201,6 +190,7 @@ end)
                 end
             end
             snapshot = bindings:snapshot(now)
+            snapshot.inHTC = game.PlaceId == TeleportResume.HTC
             for _, detail in ipairs(bindings.errors) do
                 if not reportedBindingErrors[detail] then log(detail); reportedBindingErrors[detail] = true end
             end
@@ -213,6 +203,7 @@ end)
                     bindings.lastKinds, bindings.activeChallenge = {}, nil
                 end
                 if wasActive and not engine.active then
+                    cycle:cancel()
                     release(); bindings:pause(); wasPlaying = false
                     save(); ui:updateFeature("chamber", engine, rhythm, now)
                 end
@@ -223,6 +214,14 @@ end)
                         local valid = function() return live and engine.active and engine.generation == action.generation end
                         local succeeded, detail
                         local ready = true
+                        if action.kind == "cycle" then
+                            bindings:pause(); wasPlaying = false
+                            if valid() then succeeded, detail = pcall(cycle.depart, cycle) end
+                            engine:complete(action, succeeded, os.clock(), detail)
+                            actionRunning = false
+                            if live then save(); ui:updateFeature("chamber", engine, rhythm, os.clock()) end
+                            return
+                        end
                         if action.kind == "start" then
                             ready = ensureNightmare(true)
                             if ready then
@@ -265,14 +264,19 @@ end)
             end
         end)
         if not ok then
+            cycle:cancel()
             engine:halt(now, "Stopped: " .. tostring(reason))
             release(); bindings:pause(); wasPlaying = false
             save(); ui:updateFeature("chamber", engine, rhythm, now)
         end
     end)
-    if env.__DBFR_AUTORESUME then
-        env.__DBFR_AUTORESUME = nil
-        if config.resumeAfterTeleport then toggle() end
+    if type(arrival) == "table" and arrival.target == game.PlaceId and arrival.userId == player.UserId
+        and ((arrival.mode == "earth" and game.PlaceId == session.earthPlaceId)
+            or (arrival.mode == "train" and game.PlaceId == TeleportResume.HTC))
+        and type(arrival.issued) == "number" and os.time() - arrival.issued >= 0 and os.time() - arrival.issued <= 600 then
+        engine:setActive(true, os.clock())
+        cycle:resume(arrival.mode)
+        features:sync(); save(); ui:updateFeature("chamber", engine, rhythm, os.clock())
     end
     return env.__DBFR_APP
 end

@@ -74,10 +74,9 @@ function Engine:step(s, now)
         self.timer:observe(s.timer, now)
         self.nextTimer = now + 1.2
     end
-    -- During the overnight idle window, do not refresh or click Roblox's
-    -- Reconnect dialog early. The game must receive the full idle interval.
-    if self.state == "afk" and now < (self.afkUntil or math.huge) then return nil end
-    -- Disconnects have priority in every active state once the AFK interval ends.
+    -- Cross-server travel owns input until the destination is ready.
+    if self.state == "cycling" then return nil end
+    -- Unexpected disconnects retain the existing reconnect fallback.
     if now >= self.nextModal then
         self.nextModal = now + c.reconnectPoll
         self.modalFrames = s.reconnect and self.modalFrames + 1 or 0
@@ -114,13 +113,15 @@ function Engine:step(s, now)
         self:halt(now, "The hub did not become ready")
         return nil
     end
-    if self.state == "afk" then
-        if not self.afkComplete then
-            self.afkComplete = true
-            self.status = "AFK interval complete; waiting for the Reconnect button"
-            self.log(self.status)
-        end
+    local remaining = self.timer:remaining(now)
+    if self.awaitFreshTimer and remaining and remaining > c.cycleAtSeconds then self.awaitFreshTimer = false end
+    if self.awaitFreshTimer and now - (self.freshTimerSince or now) > c.loadTimeout then
+        self:halt(now, "HTC timer did not renew after re-entry; overnight travel stopped")
         return nil
+    end
+    if s.inHTC and remaining and remaining <= c.cycleAtSeconds and not self.awaitFreshTimer and not c.dryRun then
+        self:transition("cycling", now, "HTC has one minute left; preparing Earth round trip")
+        return self:action("cycle", now)
     end
     -- RespawnLocal creates PlayerGui.RespawnUI.RespawnCanvas on Humanoid.Died
     -- and removes it only after the new character has AttackCheck. It is an
@@ -131,13 +132,6 @@ function Engine:step(s, now)
     end
     if s.trainingKnown and s.alive == false and self.state ~= "respawning" then
         self:waitForRespawn(now, "Character reset; waiting for your character", now + c.respawnWait)
-        return nil
-    end
-    local remaining = self.timer:remaining(now)
-    if remaining and remaining <= c.afkMinutes * 60 and c.afkMinutes > 0 then
-        self.afkUntil, self.afkComplete = now + c.afkDurationMinutes * 60, false
-        self:transition("afk", now, "HTC has " .. c.afkMinutes .. " minutes left; staying idle for "
-            .. c.afkDurationMinutes .. " minutes")
         return nil
     end
     if self.state == "respawn_menu" then

@@ -18,7 +18,7 @@ local events = {
     transform = {{"Transform", "Transformtion"}, true},
     save = {{"SaveFeature", "SaveData"}},
 }
-function Features.new(player, ui, blocked, saved, onChange, env)
+function Features.new(player, ui, blocked, saved, onChange, env, session)
     local self = setmetatable({player = player, ui = ui, blocked = blocked, onChange = onChange,
         enabled = {}, values = {}, contexts = {}, live = true, messages = {}, actionTimes = {}}, Features)
     for _, name in ipairs(Catalog.pages) do ui:addPage(name) end
@@ -41,7 +41,12 @@ function Features.new(player, ui, blocked, saved, onChange, env)
     ui:addButton("Visuals", "resetFov", "Restore Game FOV", function() self:set("fov", false) end)
     self.htcEntry = HTCEntry.new(player, function()
         return self.live and not self.blocked() and not self.enabled.meditate
-    end, function(message) self:status("enterHTC", message) end, env)
+    end, function(message) self:status("enterHTC", message) end, env,
+        session and type(env.readfile) == "function" and type(env.writefile) == "function"
+            and type(env.makefolder) == "function" and {prepare = function()
+                local ok = pcall(session.prepare, session, 4178935231, "manual")
+                return ok
+            end} or nil)
     self:status("enterHTC", "No cooldown: free entry. Active cooldown: 60,000 Zeni.")
     return self
 end

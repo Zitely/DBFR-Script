@@ -1,8 +1,9 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.5.1 includes manual HTC entry
-with a cooldown-fee option in Travel.** Movement, Combat, Visuals, QOL, and Travel
+orange and gold Dragon Ball themed hub. **Version 1.6.0 replaces the 20-minute
+AFK wait with automatic Earth → HTC travel at one minute remaining.**
+Movement, Combat, Visuals, QOL, and Travel
 tabs sit alongside the existing Chamber toggle. Right Shift
 shows or hides the hub; the top-right controls minimize or exit. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
@@ -17,8 +18,10 @@ counters using the game controller and Minigame module supplied by the user.
    ```
 
    It downloads the current Chamber build from `main` every time you execute it.
-2. At the game's training hub, click **CHAMBER AUTO TRAIN** to turn automation on.
+2. On Earth or in HTC, click **CHAMBER AUTO TRAIN** to turn automation on.
    Click the same button again to stop. Drag the header to move the panel.
+   On Earth it enters HTC; inside HTC it starts training. Overnight travel uses
+   the game's 60,000-Zeni re-entry option when a cooldown is active.
 
 | Window control | Action |
 | --- | --- |
@@ -30,7 +33,8 @@ Hiding or minimizing keeps Chamber running if it is on. Use its feature toggle
 to pause, or × to exit. Execute the full script again to reopen after exiting.
 
 The panel displays its version, current action, and bottom-right HTC timer. Fresh execution
-starts with Chamber off. Running the script again unloads its previous instance,
+starts with Chamber off; an automatic overnight teleport resumes the active cycle.
+Running the script again unloads its previous instance,
 releases held inputs, and disconnects the old loop before creating the new panel.
 Turning Chamber on during an existing minigame adopts it after three observations
 of the game's active training state. It moves the pointer away from the hub before
@@ -60,10 +64,9 @@ the added features have no keyboard toggle shortcuts. Flight stops moving while
 typing. Travel uses live NPC positions where available, with the uploaded script's
 coordinates as fallbacks. It moves the character only when clicked.
 
-**The uploaded Auto HTC, overnight/quick-cycle engine, and automatic re-entry
-loop are not imported.** The
-original Chamber Start, solver, health reset, readiness checks, and 30-minute /
-20-minute overnight cycle remain in use. Movement, combat, charging, manual
+The original Chamber Start, solver, health reset, and readiness checks now run
+with a dedicated Earth → HTC cycle. The uploaded Auto HTC and overnight engines
+are not imported. Movement, combat, charging, manual
 meditation, camera overrides, and Anti-AFK pause while Chamber runs. Manual travel
 and recharge also require Chamber and Auto Meditate to be off. Nonconflicting
 visuals and data saving can remain enabled.
@@ -87,7 +90,7 @@ visuals and data saving can remain enabled.
   requested cannot be undone by cancellation.
 - When the executor supports a teleport queue, the public hub loader is queued
   once. It opens with Chamber off; it does not start a new training/overnight loop.
-  Otherwise, run your usual loader after joining. No retries happen automatically.
+  Otherwise, run your usual loader after joining. This manual button does not retry automatically.
 
 The upload's **Auto Meditate** equips owned weights and solves a manually started
 minigame; it does not initiate meditation. Here it uses the existing DBFR lane
@@ -243,12 +246,25 @@ the Roblox window and has no desktop monitor selection.
   selected, then equips the strongest available **Heavy**, **Medium**, or **Light
   Weights** tool. It does not start the round if Nightmare cannot be selected.
 - **HTC timer:** verifies two plausible readings and extrapolates between reads.
-  At **30 minutes remaining** by default, it stops all input for **20 minutes**.
   Unknown timers are not given a guessed duration. A verified countdown survives
   normal respawn.
-- **Overnight reconnect:** after that AFK interval, it resumes looking for the
-  Reconnect button, confirms two observations, approaches smoothly, hovers, and
-  clicks. It allows three attempts with a nine-second cooldown after
+- **Overnight travel:** at **1:00 remaining**, releases inputs and teleports to
+  Earth (`14694717758`). After the character and game data load, it checks the
+  HTC cooldown and enters HTC (`4178935231`), using the same fee sequence as
+  the manual Travel button. An active cooldown can cost **60,000 Zeni each
+  cycle**; insufficient funds or an unreadable cooldown pause automation.
+  Transport failures allow up to three attempts, ten seconds apart, without
+  resending that cycle's fee. A server entry request that hangs stops the cycle.
+  There is no 20-minute AFK interval.
+- **After returning:** the hub reloads and waits at least seven seconds, then
+  requires three ready samples: a living character above 2 health, root part,
+  `AttackCheck`, no respawn canvas, and usable training controls. It selects
+  Nightmare, equips weights, and presses Start through the existing code.
+  A verified timer above one minute must appear before another automatic trip;
+  if the timer does not renew within 150 seconds, the hub pauses.
+- **Unexpected disconnects:** still use the Reconnect button fallback. It confirms
+  two observations, approaches smoothly, hovers, and clicks. It allows three
+  attempts with a nine-second cooldown after
   each click, waits seven seconds after the hub returns, and starts again. Retry
   counts reset for later disconnects. Reconnecting clears the old session timer.
 - **Off:** cancels pending actions, releases inputs, and stops discovery. Errors
@@ -257,8 +273,8 @@ the Roblox window and has no desktop monitor selection.
 
 Defaults live in `src/Config.lua`; previous configuration remains readable from
 `DBFR_Lua/settings.json` when executor file functions are available. There is no
-settings page. AFK intentionally stops input for the full configured interval
-before it acts on Reconnect.
+settings page. Old `afkMinutes`, `afkDurationMinutes`, and `resumeAfterTeleport`
+settings are ignored. The new cycle starts at `cycleAtSeconds = 60` by default.
 
 ## Executor compatibility
 
@@ -267,14 +283,20 @@ Input uses executor mouse/key functions when available, otherwise
 detection needs access to its GUI, usually in CoreGui. Ordinary Roblox
 LocalScripts do not provide all executor capabilities used by this application.
 
-A disconnect can destroy the Lua session. To reload automatically when supported,
-place the full bundle at `DBFR_Lua/chamber.lua` in the executor workspace and set
-`config.resumeAfterTeleport` to `true` in `DBFR_Lua/settings.json` before executing
-the script. Turning Chamber on then registers the executor's teleport queue.
-Pausing or unloading cancels the saved resume request. Queue, file, compiler,
-and executor reattachment support are required; a disconnect/rejoin may not
-trigger the same queue event as a normal teleport. Otherwise, execute the full
-script again after rejoining.
+Automatic overnight travel requires a teleport queue (`queue_on_teleport` or a
+supported alias), `readfile`, `writefile`, `makefolder`, HTTP access, `loadstring`,
+and executor reattachment after teleport. No settings edit or manual file copy
+is needed. Missing queue/storage support stops the cycle before it teleports.
+The queued loader downloads the current public build on each hop.
+
+`DBFR_Lua/teleport.json` stores a single-use continuation for the destination,
+player, and cycle phase; a ticket expires after ten minutes. Pausing or unloading
+revokes it, and a file failure is reported. A teleport already sent or a fee
+already requested cannot be undone. On arrival, unrelated tool toggles stay off.
+
+A disconnect can destroy the Lua session and may not trigger the same queue
+event as a normal teleport. Run the usual loader after rejoining if the hub does
+not reload.
 
 ## Development
 
@@ -283,7 +305,7 @@ is a separate repository.
 
 | File | Purpose |
 | --- | --- |
-| `src/Engine.lua` | Training, recovery, AFK, and reconnect state machine |
+| `src/Engine.lua` | Training, recovery, cycle trigger, and reconnect state machine |
 | `src/Rhythm.lua` | Note motion, input timing, and spam lifecycle |
 | `src/GuiIndex.lua` | Bounded discovery and GUI event subscriptions |
 | `src/Bindings.lua` | Automatic recognition and cached candidate sampling |
@@ -291,7 +313,9 @@ is a separate repository.
 | `src/Input.lua` | Smooth movement, cancellation, and input release |
 | `src/UI.lua` | Dragon Ball tabs, scrolling controls, and independent Chamber status |
 | `src/FeatureCatalog.lua`, `src/Features.lua` | Optional feature controls, scheduling, remote actions, and conflict handling |
-| `src/HTCEntry.lua` | Manual HTC cooldown/fee request, cancellable entry, and optional hub reload |
+| `src/HTCEntry.lua` | Shared HTC cooldown/fee request and cancellable entry |
+| `src/Overnight.lua` | Earth/HTC round trip, readiness checks, and bounded teleport retries |
+| `src/TeleportResume.lua` | Destination-specific continuation tickets and queued public loader |
 | `src/HubEffects.lua`, `src/EffectScope.lua` | Movement/visual effects with reversible property and connection ownership |
 | `src/WorldMarkers.lua` | Bounded NPC/radar discovery and owned marker cleanup |
 | `src/Main.lua` | Chamber lifecycle, saved configuration, optional teleport reload |
@@ -319,9 +343,12 @@ reconnects, timer retention, sustained spam, cancellation and release, automatic
 recognition, event-driven discovery, pause/unload cleanup, and large GUI fixtures.
 Hub tests cover remote cadences, yielding block cancellation, feature conflicts,
 restoration on character/camera replacement, marker discovery, notifications,
-manual travel, shared meditation solving, and Anti-AFK suspension during overnight idle.
+manual travel, shared meditation solving, and Anti-AFK suspension during Chamber.
 Manual HTC tests cover free entry, fee ordering, insufficient funds, invalid cooldowns,
 duplicate requests, failed teleport retries, cancellation, and reload without automation.
+Overnight tests execute queued code across simulated clients, covering repeated round
+trips, fee deduplication, character/data readiness, stale timers, bounded failures,
+missing executor capabilities, cancellation, and invalid or consumed tickets.
 It uses deterministic Roblox API doubles and does not render Roblox or validate
 live executor permissions. The source uses the Lua 5.1-compatible subset of Luau;
 the shipped application runs inside Roblox.

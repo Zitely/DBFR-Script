@@ -130,7 +130,7 @@ function UI:selectPage(name)
         page.tab.TextColor3 = key == name and C.bg or C.muted
         page.tab.BackgroundColor3 = key == name and C.orange or C.card
     end
-    self.help.Text = name == "Chamber" and "Your existing training, recovery and overnight cycle."
+    self.help.Text = name == "Chamber" and "At 1:00: Earth → HTC. Cooldown re-entry costs 60,000 Zeni."
         or name == "Travel" and "Manual travel. Turn Chamber off before using these controls."
         or "Optional tools start OFF. Conflicting tools pause while Chamber runs."
 end

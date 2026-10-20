@@ -1,5 +1,5 @@
 -- Downloads the current public Chamber bundle from GitHub.
-local url = "https://raw.githubusercontent.com/Zitely/DBFR-Script/main/dist/chamber.lua"
+local url = "https://raw.githubusercontent.com/Zitely/DBFR-Script/main/dist/chamber.lua?t=" .. tostring(os.time())
 local env = _G
 if type(getgenv) == "function" then
     local ok, result = pcall(getgenv)
