@@ -2,6 +2,7 @@ local Catalog = require("src.FeatureCatalog")
 local Scope = require("src.EffectScope")
 local Effects = require("src.HubEffects")
 local Weights = require("src.Weights")
+local HTCEntry = require("src.HTCEntry")
 local Features = {}
 Features.__index = Features
 local intervals = {speed = 0.1, jump = 0.2, noclip = 0, flight = 0,
@@ -17,7 +18,7 @@ local events = {
     transform = {{"Transform", "Transformtion"}, true},
     save = {{"SaveFeature", "SaveData"}},
 }
-function Features.new(player, ui, blocked, saved, onChange)
+function Features.new(player, ui, blocked, saved, onChange, env)
     local self = setmetatable({player = player, ui = ui, blocked = blocked, onChange = onChange,
         enabled = {}, values = {}, contexts = {}, live = true, messages = {}, actionTimes = {}}, Features)
     for _, name in ipairs(Catalog.pages) do ui:addPage(name) end
@@ -38,6 +39,10 @@ function Features.new(player, ui, blocked, saved, onChange)
         else ui:addButton(page, id, title, function() self:action(id) end) end
     end
     ui:addButton("Visuals", "resetFov", "Restore Game FOV", function() self:set("fov", false) end)
+    self.htcEntry = HTCEntry.new(player, function()
+        return self.live and not self.blocked() and not self.enabled.meditate
+    end, function(message) self:status("enterHTC", message) end, env)
+    self:status("enterHTC", "No cooldown: free entry. Active cooldown: 60,000 Zeni.")
     return self
 end
 function Features:status(id, text)
@@ -105,6 +110,7 @@ function Features:stopContext(id)
     if c.charging then pcall(c.charging.FireServer, c.charging, false) end
 end
 function Features:sync()
+    if self.htcEntry and (self.blocked() or self.enabled.meditate) then self.htcEntry:cancel() end
     if self.recharge and (self.blocked() or self.enabled.meditate) then
         pcall(self.recharge.FireServer, self.recharge, false); self.recharge = nil
     end
@@ -186,6 +192,7 @@ function Features:step(now)
 end
 function Features:action(id)
     if not self.live then return end
+    if id == "enterHTC" then self.htcEntry:request(); return end
     if self.blocked() or self:running("meditate") then
         self:status(id, "Turn Chamber / Auto Meditate off first")
         return
@@ -227,6 +234,7 @@ function Features:action(id)
 end
 function Features:destroy()
     self.live = false
+    self.htcEntry:destroy()
     for id in pairs(self.contexts) do self:stopContext(id) end
     if self.recharge then pcall(self.recharge.FireServer, self.recharge, false); self.recharge = nil end
 end

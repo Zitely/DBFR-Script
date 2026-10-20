@@ -25,6 +25,7 @@ Catalog.controls = {
     {"QOL", "save", "Auto Save Player Data · every 30s", "toggle"},
     {"QOL", "antiAfk", "Anti-AFK Protection", "toggle"},
     {"QOL", "shake", "Reduce Screen Shake", "toggle"},
+    {"Travel", "enterHTC", "Enter HTC · bypass costs 60,000 Zeni", "button"},
 }
 Catalog.destinations = {
     {"earth", "Earth Central Spawn", nil, -2460, 1242, 16825},

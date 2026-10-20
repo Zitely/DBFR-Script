@@ -1,8 +1,9 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.5.0 adds Movement, Combat,
-Visuals, QOL, and Travel tabs alongside the existing Chamber toggle.** Right Shift
+orange and gold Dragon Ball themed hub. **Version 1.5.1 includes manual HTC entry
+with a cooldown-fee option in Travel.** Movement, Combat, Visuals, QOL, and Travel
+tabs sit alongside the existing Chamber toggle. Right Shift
 shows or hides the hub; the top-right controls minimize or exit. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
 counters using the game controller and Minigame module supplied by the user.
@@ -52,20 +53,41 @@ automatically. Adjust FOV to apply an override; **Restore Game FOV** removes it.
 | Combat | Fast punch, Ki blasts, block/parry, face nearest living player, transformation, one-second Ki recharge |
 | Visuals | Player ESP, NPC ESP, fullbright, clear sky/fog removal, FOV and FOV restoration |
 | QOL | Auto Meditate, Ki charge, Dragon Ball radar with distance and notifications, data save every 30 seconds, Anti-AFK, reduced screen shake |
-| Travel | Earth spawn, West City, Satan City, Ginger Town, Nam's Village, Mr. Popo, Kame House, Gravity Chamber, training dummies |
+| Travel | Manual HTC entry/cooldown fee, Earth spawn, West City, Satan City, Ginger Town, Nam's Village, Mr. Popo, Kame House, Gravity Chamber, training dummies |
 
 Flight uses WASD, E/Space to ascend, and Q to descend. These are movement inputs;
 the added features have no keyboard toggle shortcuts. Flight stops moving while
 typing. Travel uses live NPC positions where available, with the uploaded script's
 coordinates as fallbacks. It moves the character only when clicked.
 
-**The uploaded Auto HTC, overnight/quick-cycle engine, automatic re-entry,
-cooldown-bypass payments, and teleport reload logic are not imported.** The
+**The uploaded Auto HTC, overnight/quick-cycle engine, and automatic re-entry
+loop are not imported.** The
 original Chamber Start, solver, health reset, readiness checks, and 30-minute /
 20-minute overnight cycle remain in use. Movement, combat, charging, manual
 meditation, camera overrides, and Anti-AFK pause while Chamber runs. Manual travel
 and recharge also require Chamber and Auto Meditate to be off. Nonconflicting
 visuals and data saving can remain enabled.
+
+**Travel → Enter HTC · bypass costs 60,000 Zeni** is a manual action:
+
+- Reads the game's `TimeCheck:InvokeServer(2)`. With zero cooldown, it requests a
+  teleport to HTC (`4178935231`) without paying a re-entry fee.
+- With an active cooldown and at least 60,000 Zeni in `Data.Moneys`, it requests
+  `NPCStuff:FireServer("GravityChamberReEnterFee")`, then `GetQuest:FireServer(70)`,
+  waits 0.2 seconds, and requests the teleport. This spends in-game currency;
+  it does not remove the fee or guarantee the server will accept re-entry.
+- Missing controls, an unreadable cooldown, or insufficient funds stop the action
+  with a reason. The button does nothing if already inside HTC.
+- Only one request can run at a time. Repeated clicks while teleporting wait ten
+  seconds; a reported teleport failure allows another manual attempt. Once a fee
+  is requested, retries in the same hub instance do not request it again, even
+  if the first call failed. Reloading the script creates a new instance.
+- Closing the hub, starting Chamber/Auto Meditate, or losing the current living
+  character cancels remaining work before teleport is sent. A payment already
+  requested cannot be undone by cancellation.
+- When the executor supports a teleport queue, the public hub loader is queued
+  once. It opens with Chamber off; it does not start a new training/overnight loop.
+  Otherwise, run your usual loader after joining. No retries happen automatically.
 
 The upload's **Auto Meditate** equips owned weights and solves a manually started
 minigame; it does not initiate meditation. Here it uses the existing DBFR lane
@@ -269,6 +291,7 @@ is a separate repository.
 | `src/Input.lua` | Smooth movement, cancellation, and input release |
 | `src/UI.lua` | Dragon Ball tabs, scrolling controls, and independent Chamber status |
 | `src/FeatureCatalog.lua`, `src/Features.lua` | Optional feature controls, scheduling, remote actions, and conflict handling |
+| `src/HTCEntry.lua` | Manual HTC cooldown/fee request, cancellable entry, and optional hub reload |
 | `src/HubEffects.lua`, `src/EffectScope.lua` | Movement/visual effects with reversible property and connection ownership |
 | `src/WorldMarkers.lua` | Bounded NPC/radar discovery and owned marker cleanup |
 | `src/Main.lua` | Chamber lifecycle, saved configuration, optional teleport reload |
@@ -297,6 +320,8 @@ recognition, event-driven discovery, pause/unload cleanup, and large GUI fixture
 Hub tests cover remote cadences, yielding block cancellation, feature conflicts,
 restoration on character/camera replacement, marker discovery, notifications,
 manual travel, shared meditation solving, and Anti-AFK suspension during overnight idle.
+Manual HTC tests cover free entry, fee ordering, insufficient funds, invalid cooldowns,
+duplicate requests, failed teleport retries, cancellation, and reload without automation.
 It uses deterministic Roblox API doubles and does not render Roblox or validate
 live executor permissions. The source uses the Lua 5.1-compatible subset of Luau;
 the shipped application runs inside Roblox.

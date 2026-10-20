@@ -8,7 +8,7 @@ local Weights = require("src.Weights")
 local Respawn = require("src.Respawn")
 local Features = require("src.Features")
 local Main = {}
-local VERSION = "1.5.0"
+local VERSION = "1.5.1"
 
 function Main.start()
     local env = type(getgenv) == "function" and getgenv() or _G
@@ -151,7 +151,7 @@ end)
     features = Features.new(player, ui, function() return engine.active or actionRunning end, saved.hub, function(id, kind)
         if id == "meditate" and not engine.active then release(); bindings:pause(); wasPlaying = false end
         if kind == "slider" then hubSettingsDirty = true end
-    end)
+    end, env)
     env.__DBFR_APP = {unload = unload, toggle = toggle, version = VERSION, ui = ui, scanner = bindings, features = features}
     log("Chamber " .. VERSION .. " loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
     log(input:description())

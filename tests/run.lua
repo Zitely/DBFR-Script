@@ -277,6 +277,7 @@ require("tests.game_state")(test, equal, mock)
 require("tests.minigame")(test, equal, mock)
 require("tests.respawn")(test, equal, mock)
 require("tests.features")(test, equal, mock)
+require("tests.htc_entry")(test, equal, mock)
 
 print(string.format("\n%d tests passed; %d failed", passed, failed))
 assert(failed == 0, "Test suite failed")
