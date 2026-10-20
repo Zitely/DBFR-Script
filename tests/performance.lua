@@ -111,13 +111,13 @@ return function(test, equal, mock)
         equal(sample.notes[1].id, anonymous); equal(sample.notes[1].kind, "left")
         b:pause()
     end)
-    test("default hub has one feature, two window controls, and no calibration", function()
+    test("hub keeps one Chamber toggle and shortcut alongside optional feature tabs", function()
         mock.reset()
         local app = Main.start()
-        local buttons = 0
-        for _, object in ipairs(app.ui.gui:GetDescendants()) do if object:IsA("GuiButton") then buttons = buttons + 1 end end
-        equal(buttons, 3); equal(#app.ui.order, 1); equal(#mock.uis.InputBegan.listeners, 1)
-        equal(app.ui.pages, nil); equal(app.ui.bindingLabels, nil)
+        equal(#app.ui.order, 1); equal(#mock.uis.InputBegan.listeners, 1)
+        equal(#app.ui.pageOrder, 6); equal(app.ui.selectedPage, "Chamber")
+        equal(app.ui.controls.autoHtc, nil); equal(app.ui.controls.overnight, nil)
+        equal(app.ui.bindingLabels, nil)
         app.unload()
     end)
 end

@@ -1,9 +1,9 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.3.0 has one Chamber toggle,
-a Right Shift visibility shortcut, and top-right minimize and exit buttons.**
-The hub supports additional feature rows as the project grows. Detection is
+orange and gold Dragon Ball themed hub. **Version 1.5.0 adds Movement, Combat,
+Visuals, QOL, and Travel tabs alongside the existing Chamber toggle.** Right Shift
+shows or hides the hub; the top-right controls minimize or exit. Detection is
 automatic. It now reads DBFR's live note lanes, linked double notes, and mash
 counters using the game controller and Minigame module supplied by the user.
 
@@ -40,6 +40,55 @@ player's `Difficulty` attribute and selects **Nightmare** through the game's
 `DifficultySet` remote only when Nightmare is not already selected. It rechecks
 after a respawn.
 
+## Optional hub tools
+
+All additional toggles start **off**, including Anti-AFK. Slider preferences are
+saved locally when executor storage is available; feature toggles are not resumed
+automatically. Adjust FOV to apply an override; **Restore Game FOV** removes it.
+
+| Tab | Tools |
+| --- | --- |
+| Movement | Speed boost and walk speed, infinite jump, noclip, Saiyan flight and flight speed |
+| Combat | Fast punch, Ki blasts, block/parry, face nearest living player, transformation, one-second Ki recharge |
+| Visuals | Player ESP, NPC ESP, fullbright, clear sky/fog removal, FOV and FOV restoration |
+| QOL | Auto Meditate, Ki charge, Dragon Ball radar with distance and notifications, data save every 30 seconds, Anti-AFK, reduced screen shake |
+| Travel | Earth spawn, West City, Satan City, Ginger Town, Nam's Village, Mr. Popo, Kame House, Gravity Chamber, training dummies |
+
+Flight uses WASD, E/Space to ascend, and Q to descend. These are movement inputs;
+the added features have no keyboard toggle shortcuts. Flight stops moving while
+typing. Travel uses live NPC positions where available, with the uploaded script's
+coordinates as fallbacks. It moves the character only when clicked.
+
+**The uploaded Auto HTC, overnight/quick-cycle engine, automatic re-entry,
+cooldown-bypass payments, and teleport reload logic are not imported.** The
+original Chamber Start, solver, health reset, readiness checks, and 30-minute /
+20-minute overnight cycle remain in use. Movement, combat, charging, manual
+meditation, camera overrides, and Anti-AFK pause while Chamber runs. Manual travel
+and recharge also require Chamber and Auto Meditate to be off. Nonconflicting
+visuals and data saving can remain enabled.
+
+The upload's **Auto Meditate** equips owned weights and solves a manually started
+minigame; it does not initiate meditation. Here it uses the existing DBFR lane
+reader and rhythm solver, requests an already-owned weight if its tool is missing,
+and equips the strongest available tool. It never starts training, selects
+difficulty, resets the character, or operates an HTC timer. It pauses conflicting
+combat/movement tools while enabled.
+
+Remote-based tools use the names and arguments from the uploaded script. Missing
+or incompatible remotes display an **Unavailable** reason beneath the control.
+Sending a request cannot guarantee the server accepts it: Recharge Ki does not
+promise an instant maximum, and block/parry uses the game's blocking operation.
+Reduce Screen Shake preserves Roblox's normal camera update and removes later
+render-step offsets; it does not suppress every possible camera effect or alter
+scripted cameras/cutscenes.
+
+Switching off or exiting restores properties still owned by the effect and removes
+only this hub's highlights, flight movers, and connections. Player ESP refreshes
+once per second and follows respawns. NPC/radar discovery is limited to named
+world folders, processes at most 64 work items per update, and caps each marker
+set at 128. New balls notify once per object while radar is enabled. No world-wide
+scan runs every frame. Live Roblox/executor compatibility remains to be tested.
+
 `loader.lua` and `dist/chamber.lua` are identical, self-contained programs. Their
 first line is:
 
@@ -61,8 +110,9 @@ from the complete file, retain the full error text and executor name.
 The previous version inspected every GUI object every frame, including while
 paused, and repeatedly rebuilt its object list. This version:
 
-- Does no discovery or automation work while Chamber is off, and disconnects its
-  GUI observers when turned off.
+- Does no discovery or automation work with all tools off. Chamber disconnects
+  its GUI observers when turned off; Auto Meditate can independently use the same
+  scanner while enabled. Optional tools share the single heartbeat scheduler.
 - Builds an index incrementally, then follows GUI addition, removal, text, image,
   name, and attribute events. Newly appearing prompts take priority over the
   initial inventory of existing UI.
@@ -89,9 +139,9 @@ health above 2, `Main.UICoolDown` false, and
 `Characters.Interactions.Resting` false. These values are read, never rewritten.
 
 The supplied `PlayerScripts.RespawnLocal` script creates
-`PlayerGui.RespawnUI.RespawnCanvas` whenever the Humanoid dies. When the training
-health gate is hit, Chamber sends Roblox's built-in **Escape → R** respawn shortcut,
-then clicks the visible Respawn confirmation. Once the game clones that canvas,
+`PlayerGui.RespawnUI.RespawnCanvas` whenever the Humanoid dies. Chamber checks the
+live Humanoid every 50 ms and, when health is above zero and at or below 2, sets
+health to zero and calls `BreakJoints()`. Once the game clones that canvas,
 Chamber stops further recovery input and waits
 for it to disappear and for the new character to have `AttackCheck` before
 collecting three fresh, start-ready samples.
@@ -163,9 +213,8 @@ the Roblox window and has no desktop monitor selection.
   are 20 ms held and 20 ms released, with a cap of 125 attempts. Frame scheduling
   and the executor affect the actual rate; sending a press does not prove the
   game counted it. Consecutive mash notes are distinguished by object identity.
-- **Recovery:** notices health at or below 2 while training is inactive on the
-  next state check (about 100 ms), sends **Escape → R**, and clicks the visible
-  Respawn confirmation. Once the game produces its source-confirmed RespawnUI canvas,
+- **Recovery:** checks health every 50 ms, including during training, and directly
+  resets a living character at health at or below 2. Once the game produces its source-confirmed RespawnUI canvas,
   it waits for that canvas to go away, then requires three ready samples with
   health above 2, cleared cooldown, and no resting before it sends a fresh Start.
 - **Nightmare and weights:** before every Start, Chamber verifies Nightmare is
@@ -218,7 +267,10 @@ is a separate repository.
 | `src/Bindings.lua` | Automatic recognition and cached candidate sampling |
 | `src/GameState.lua`, `src/GameNotes.lua` | Exact DBFR state gates and live note/counter reader |
 | `src/Input.lua` | Smooth movement, cancellation, and input release |
-| `src/UI.lua` | Compact Dragon Ball hub and independent feature rows |
+| `src/UI.lua` | Dragon Ball tabs, scrolling controls, and independent Chamber status |
+| `src/FeatureCatalog.lua`, `src/Features.lua` | Optional feature controls, scheduling, remote actions, and conflict handling |
+| `src/HubEffects.lua`, `src/EffectScope.lua` | Movement/visual effects with reversible property and connection ownership |
+| `src/WorldMarkers.lua` | Bounded NPC/radar discovery and owned marker cleanup |
 | `src/Main.lua` | Chamber lifecycle, saved configuration, optional teleport reload |
 | `src/Capture.lua`, `dist/capture_minigame.lua` | Optional read-only diagnostic and its standalone bundle |
 | `src/Timer.lua`, `src/Config.lua` | Countdown verification and validated defaults |
@@ -237,11 +289,14 @@ status labels. Keep the feature's state, input handling, and cleanup independent
 of Chamber; adding a row does not start another scanning loop. Chamber currently
 registers one row in `Main.lua`. No keyboard binding is needed.
 
-The 90-test offline suite covers exact note names and normalized timing across
+The offline suite covers exact note names and normalized timing across
 difficulty speeds, linked doubles, 25 accepted mash inputs at 30/60 Hz, lane
 replacement, source-confirmed RespawnUI handling, recovery order, post-respawn Start gating, repeated
 reconnects, timer retention, sustained spam, cancellation and release, automatic
 recognition, event-driven discovery, pause/unload cleanup, and large GUI fixtures.
+Hub tests cover remote cadences, yielding block cancellation, feature conflicts,
+restoration on character/camera replacement, marker discovery, notifications,
+manual travel, shared meditation solving, and Anti-AFK suspension during overnight idle.
 It uses deterministic Roblox API doubles and does not render Roblox or validate
 live executor permissions. The source uses the Lua 5.1-compatible subset of Luau;
 the shipped application runs inside Roblox.

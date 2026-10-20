@@ -6,8 +6,9 @@ local Input = require("src.Input")
 local UI = require("src.UI")
 local Weights = require("src.Weights")
 local Respawn = require("src.Respawn")
+local Features = require("src.Features")
 local Main = {}
-local VERSION = "1.4.0"
+local VERSION = "1.5.0"
 
 function Main.start()
     local env = type(getgenv) == "function" and getgenv() or _G
@@ -26,10 +27,11 @@ function Main.start()
     -- untouched value to the requested 30-minute overnight threshold.
     if saved.version == 1 and savedConfig.afkMinutes == 35 then savedConfig.afkMinutes = nil end
     local config = Config.new(savedConfig)
-    local ui, engine, bindings, rhythm
+    local ui, engine, bindings, rhythm, features
     local input = Input.new(env)
     local live, queueRegistered = true, false
     local actionRunning, nextEngine, nextUI, nextHealthCheck, lastTick = false, 0, 0, 0, -math.huge
+    local hubSettingsDirty, nextSettingsSave = false, 0
     local wasPlaying = false
     local reportedBindingErrors = {}
     local connections = {}
@@ -42,6 +44,7 @@ function Main.start()
         local ok, err = pcall(function()
             pcall(env.makefolder, "DBFR_Lua")
             env.writefile(storage, http:JSONEncode({version = 2, config = config, bindings = bindings.saved,
+                hub = features and features.values or {},
                 resumeRequested = engine.active and config.resumeAfterTeleport}))
         end)
         if not ok then log("Settings could not be saved: " .. tostring(err)) end
@@ -105,6 +108,7 @@ end)
     end
     local function stop()
         engine:setActive(false, os.clock())
+        if features then features:sync() end
         release()
         bindings:pause()
         wasPlaying = false
@@ -118,6 +122,7 @@ end)
             release()
             bindings.lastKinds, bindings.activeChallenge = {}, nil
             engine:setActive(true, os.clock())
+            if features then features:sync() end
             ensureNightmare()
             save(); registerQueue()
             ui:updateFeature("chamber", engine, rhythm, os.clock())
@@ -126,6 +131,7 @@ end)
     local function unload()
         if not live then return end
         stop(); live = false
+        if features then features:destroy() end
         for _, connection in ipairs(connections) do connection:Disconnect() end
         if ui then ui:destroy() end
         env.__DBFR_APP = nil
@@ -142,7 +148,11 @@ end)
     ui = UI.new(parent, unload, VERSION)
     ui:addFeature("chamber", "CHAMBER AUTO TRAIN", toggle)
     bindings = Bindings.new(player, saved.bindings, ui.gui)
-    env.__DBFR_APP = {unload = unload, toggle = toggle, version = VERSION, ui = ui, scanner = bindings}
+    features = Features.new(player, ui, function() return engine.active or actionRunning end, saved.hub, function(id, kind)
+        if id == "meditate" and not engine.active then release(); bindings:pause(); wasPlaying = false end
+        if kind == "slider" then hubSettingsDirty = true end
+    end)
+    env.__DBFR_APP = {unload = unload, toggle = toggle, version = VERSION, ui = ui, scanner = bindings, features = features}
     log("Chamber " .. VERSION .. " loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
     log(input:description())
     if type(env.writefile) ~= "function" then log("File storage unavailable: settings last for this session only") end
@@ -155,10 +165,32 @@ end)
     end)
     local snapshot = {notes = {}, training = false}
     connections[#connections + 1] = game:GetService("RunService").Heartbeat:Connect(function()
-        if not live or not engine.active then return end
+        if not live then return end
         local now = os.clock()
         if now - lastTick < 1 / 60 - 0.001 then return end
         lastTick = now
+        if hubSettingsDirty and now >= nextSettingsSave then
+            hubSettingsDirty, nextSettingsSave = false, now + 0.5
+            save()
+        end
+        features:step(now)
+        if not engine.active then
+            if features:running("meditate") and not actionRunning then
+                local ok, reason = pcall(function()
+                    local sample = bindings:snapshot(now)
+                    if sample.training and sample.alive and not sample.needsRecovery and not sample.respawnCanvas then
+                        if not wasPlaying then input:park(ui.window)
+                        else rhythm:step(sample.notes, sample.challenge, now) end
+                        wasPlaying = true
+                    elseif wasPlaying then release(); wasPlaying = false end
+                end)
+                if not ok then
+                    features:set("meditate", false)
+                    features:status("meditate", "Stopped: " .. tostring(reason))
+                end
+            end
+            return
+        end
         local ok, reason = pcall(function()
             -- Monitor at the requested 50 ms interval. A direct reset is much
             -- faster and more reliable than navigating Roblox's respawn menu.

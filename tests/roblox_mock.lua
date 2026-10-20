@@ -13,6 +13,7 @@ local function signal()
     end
     return s
 end
+M.signal = signal
 local vec = {}
 vec.__index = vec
 function M.vector(x, y) return setmetatable({X = x or 0, Y = y or 0}, vec) end
@@ -20,6 +21,21 @@ function vec.__add(a, b) return M.vector(a.X + b.X, a.Y + b.Y) end
 function vec.__sub(a, b) return M.vector(a.X - b.X, a.Y - b.Y) end
 function vec.__div(a, b) return M.vector(a.X / b, a.Y / b) end
 function vec:Lerp(b, alpha) return M.vector(self.X + (b.X - self.X) * alpha, self.Y + (b.Y - self.Y) * alpha) end
+local vec3 = {}
+function M.vector3(x, y, z) return setmetatable({X = x or 0, Y = y or 0, Z = z or 0}, vec3) end
+function vec3:__index(key)
+    if key == "Magnitude" then return math.sqrt(self.X * self.X + self.Y * self.Y + self.Z * self.Z) end
+    if key == "Unit" then return M.vector3(self.X / self.Magnitude, self.Y / self.Magnitude, self.Z / self.Magnitude) end
+end
+function vec3.__add(a, b) return M.vector3(a.X + b.X, a.Y + b.Y, a.Z + b.Z) end
+function vec3.__sub(a, b) return M.vector3(a.X - b.X, a.Y - b.Y, a.Z - b.Z) end
+function vec3.__mul(a, b) return M.vector3(a.X * b, a.Y * b, a.Z * b) end
+local frame = {}
+function M.cframe(x, y, z)
+    return setmetatable({Position = type(x) == "table" and x or M.vector3(x, y, z),
+        LookVector = M.vector3(0, 0, -1), RightVector = M.vector3(1, 0, 0)}, frame)
+end
+function frame.__add(a, b) return M.cframe(a.Position + b) end
 local methods, instance = {}, {}
 local guiTypes = {Frame = true, ScrollingFrame = true, TextLabel = true, TextButton = true,
     TextBox = true, ImageLabel = true, ImageButton = true, CanvasGroup = true}
@@ -66,6 +82,7 @@ function methods:IsA(class)
     return self.ClassName == class or (class == "GuiObject" and guiTypes[self.ClassName] == true)
         or (class == "GuiButton" and (self.ClassName == "TextButton" or self.ClassName == "ImageButton"))
         or (class == "LayerCollector" and self.ClassName == "ScreenGui")
+        or (class == "BasePart" and (self.ClassName == "Part" or self.ClassName == "MeshPart"))
 end
 function methods:GetChildren()
     if M.metrics then M.metrics.childrenReads = M.metrics.childrenReads + 1 end
@@ -89,6 +106,14 @@ function methods:WaitForChild(name) return assert(self:FindFirstChild(name), "Mi
 function methods:FindFirstChildOfClass(class)
     for _, child in ipairs(self.children) do if child:IsA(class) then return child end end
 end
+function methods:FindFirstChildWhichIsA(class, recursive)
+    for _, child in ipairs(self.children) do
+        if child:IsA(class) then return child end
+        if recursive then local found = child:FindFirstChildWhichIsA(class, true); if found then return found end end
+    end
+end
+function methods:GetPivot() return self.pivot or M.cframe(0, 0, 0) end
+function methods:ChangeState(state) self.lastState = state end
 function methods:EquipTool(tool)
     tool.Parent = self.Parent
 end
@@ -131,6 +156,8 @@ function M.install()
     M.realClock = os.clock
     os.clock = function() return M.now end
     Vector2 = {new = M.vector}
+    Vector3 = {new = M.vector3}
+    CFrame = {new = M.cframe}
     Color3 = {fromRGB = function(r, g, b) return {R = r / 255, G = g / 255, B = b / 255} end}
     ColorSequence = {new = function(a, b) return {a, b} end}
     UDim = {new = function(s, o) return {Scale = s, Offset = o} end}
@@ -143,6 +170,7 @@ function M.install()
         local values = setmetatable({}, {__index = function(t, key) local value = group .. "." .. key; rawset(t, key, value); return value end})
         rawset(self, group, values); return values
     end})
+    Enum.RenderPriority = {Camera = {Value = 200}, Last = {Value = 2000}}
     Instance = {new = function(class) return M.object(class) end}
     M.reset()
 end
@@ -152,20 +180,26 @@ function M.reset()
     M.root = M.object("DataModel", "game")
     game = M.root
     workspace = M.object("Workspace", "Workspace", game)
-    workspace.CurrentCamera = {ViewportSize = M.vector(1280, 720)}
+    workspace.CurrentCamera = {ViewportSize = M.vector(1280, 720), FieldOfView = 70,
+        CameraType = Enum.CameraType.Custom, CFrame = M.cframe(0, 0, 0)}
     M.player = M.object("Player", "LocalPlayer")
     M.player.CharacterAdded = signal()
+    M.player.Idled = signal()
     M.playerGui = M.object("PlayerGui", "PlayerGui", M.player)
     M.character = M.object("Model", "Character", workspace)
-    M.humanoid = M.object("Humanoid", "Humanoid", M.character, {Health = 100})
+    M.humanoid = M.object("Humanoid", "Humanoid", M.character, {Health = 100, WalkSpeed = 16, AutoRotate = true})
     M.player.Character = M.character
     M.coreGui = M.object("CoreGui", "CoreGui", game)
     M.replicatedStorage = M.object("ReplicatedStorage", "ReplicatedStorage", game)
     M.hud = M.object("ScreenGui", "HUD", M.playerGui, {IgnoreGuiInset = true})
-    M.uis = {InputBegan = signal(), InputChanged = signal(), InputEnded = signal(), cursor = M.vector(80, 200)}
+    M.uis = {InputBegan = signal(), InputChanged = signal(), InputEnded = signal(), JumpRequest = signal(),
+        keys = {}, cursor = M.vector(80, 200)}
     function M.uis:GetMouseLocation() return self.cursor end
     function M.uis:GetFocusedTextBox() return nil end
-    M.runService = {Heartbeat = signal()}
+    function M.uis:IsKeyDown(key) return self.keys[key] == true end
+    M.runService = {Heartbeat = signal(), bindings = {}}
+    function M.runService:BindToRenderStep(name, priority, fn) self.bindings[name] = {priority = priority, fn = fn} end
+    function M.runService:UnbindFromRenderStep(name) self.bindings[name] = nil end
     M.vim = {events = {}}
     function M.vim:SendMouseMoveEvent(x, y) M.uis.cursor = M.vector(x, y); self.events[#self.events + 1] = {"move", x, y} end
     function M.vim:SendMouseButtonEvent(x, y, button, down) self.events[#self.events + 1] = {"mouse", button, down, x, y} end
@@ -174,7 +208,15 @@ function M.reset()
     M.http = {}
     function M.http:JSONEncode(value) encoded[#encoded + 1] = value; return "JSON" .. #encoded end
     function M.http:JSONDecode(value) return assert(encoded[tonumber(tostring(value):match("JSON(%d+)"))]) end
-    M.services = {Players = {LocalPlayer = M.player}, CoreGui = M.coreGui, ReplicatedStorage = M.replicatedStorage, UserInputService = M.uis,
+    M.players = {LocalPlayer = M.player, list = {M.player}}
+    function M.players:GetPlayers() return self.list end
+    M.lighting = M.object("Lighting", "Lighting", game, {Ambient = "ambient", OutdoorAmbient = "outdoor", Brightness = 1, FogEnd = 1000})
+    M.virtualUser = {clicks = 0, CaptureController = function() end}
+    function M.virtualUser:ClickButton2() self.clicks = self.clicks + 1 end
+    M.notifications = {}
+    M.services = {Players = M.players, Lighting = M.lighting, VirtualUser = M.virtualUser,
+        StarterGui = {SetCore = function(_, _, notice) M.notifications[#M.notifications + 1] = notice end},
+        CoreGui = M.coreGui, ReplicatedStorage = M.replicatedStorage, UserInputService = M.uis,
         RunService = M.runService, VirtualInputManager = M.vim, HttpService = M.http,
         GuiService = {GetGuiInset = function() return M.vector(0, 36) end}}
     game.GetService = function(_, name) return assert(M.services[name], "Missing mock service " .. name) end
