@@ -299,10 +299,11 @@ return function(test, equal, mock)
         equal(saved.resumeRequested, nil); equal(saved.hub.punch, nil)
         app.unload()
     end)
-    test("rerun cleans optional listeners and starts all optional tools off", function()
+    test("a new build cleans optional listeners and starts all optional tools off", function()
         local app, hub, root = start()
         for _, id in ipairs({"flight", "jump", "antiAfk", "bright", "shake"}) do hub:set(id, true) end
         mock.tick()
+        app.version = "previous-build"
         local replacement = Main.start()
         equal(root:FindFirstChild("DBFR__Flight"), nil); equal(mock.lighting.Brightness, 1)
         equal(next(mock.runService.bindings), nil); equal(next(replacement.features.enabled), nil)

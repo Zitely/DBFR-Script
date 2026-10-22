@@ -3,12 +3,13 @@ local Scope = require("src.EffectScope")
 local Effects = require("src.HubEffects")
 local Weights = require("src.Weights")
 local HTCEntry = require("src.HTCEntry")
+local Stones = require("src.Stones")
 local Features = {}
 Features.__index = Features
 local intervals = {speed = 0.1, jump = 0.2, noclip = 0, flight = 0,
     punch = 0.1, blast = 0.15, block = 0.3, lock = 0.2, transform = 1,
     bright = 1, sky = 1, players = 1, npcs = 0.1, radar = 0.1, fov = 0.2,
-    meditate = 2, charge = 0.2, save = 30, antiAfk = 1, shake = 1}
+    meditate = 2, charge = 0.2, save = 30, antiAfk = 1, shake = 1, dragonStones = 0.5, superStones = 0.5}
 local conflicts = {speed = true, jump = true, noclip = true, flight = true,
     punch = true, blast = true, block = true, lock = true, transform = true,
     meditate = true, charge = true, antiAfk = true, fov = true, shake = true}
@@ -20,7 +21,7 @@ local events = {
 }
 function Features.new(player, ui, blocked, saved, onChange, env, session)
     local self = setmetatable({player = player, ui = ui, blocked = blocked, onChange = onChange,
-        enabled = {}, values = {}, contexts = {}, live = true, messages = {}, actionTimes = {}}, Features)
+        enabled = {}, values = {}, contexts = {}, textFormats = {}, live = true, messages = {}, actionTimes = {}}, Features)
     for _, name in ipairs(Catalog.pages) do ui:addPage(name) end
     for _, definition in ipairs(Catalog.controls) do
         local page, id, title, kind = definition[1], definition[2], definition[3], definition[4]
@@ -34,6 +35,12 @@ function Features.new(player, ui, blocked, saved, onChange, env, session)
                 if id == "fov" then self.enabled.fov = true; self:sync() end
                 if self.onChange then self.onChange(id, "slider") end
             end)
+        elseif kind == "text" then
+            self.textFormats[id] = definition[6]
+            local value = type(saved) == "table" and saved[id] or nil
+            value = Stones.validateText(value, definition[6]) or definition[5]
+            self.values[id] = value
+            ui:addTextBox(page, id, title, value, function(text) self:commitText(id, text) end)
         elseif kind == "toggle" then
             ui:addToggle(page, id, title, function() self:set(id, not self.enabled[id]) end)
         else ui:addButton(page, id, title, function() self:action(id) end) end
@@ -49,6 +56,16 @@ function Features.new(player, ui, blocked, saved, onChange, env, session)
             end} or nil)
     self:status("enterHTC", "No cooldown: free entry. Active cooldown: 60,000 Zeni.")
     return self
+end
+function Features:commitText(id, text)
+    if not self.live then return false end
+    local value, reason = Stones.validateText(text, self.textFormats[id])
+    if not value then self:status(id, reason); return false end
+    self.values[id] = value
+    self.ui.controls[id].input.Text = value
+    self:status(id, "Saved")
+    if self.onChange then self.onChange(id, "text") end
+    return true
 end
 function Features:status(id, text)
     if not self.live or self.messages[id] == text then return end
@@ -133,6 +150,15 @@ function Features:sync()
 end
 function Features:set(id, enabled)
     if not self.live or not intervals[id] then return end
+    if enabled and (id == "dragonStones" or id == "superStones") then
+        local fields = id == "dragonStones" and {"questName", "questDragonStones", "questZeni", "questSuperStones"}
+            or {"superStoneTarget"}
+        local valid = true
+        for _, field in ipairs(fields) do
+            if not self:commitText(field, self.ui.controls[field].input.Text) then valid = false end
+        end
+        if not valid then self:status(id, "Enter valid values above before enabling"); return end
+    end
     self.enabled[id] = enabled == true
     self.ui:setControlEnabled(id, self.enabled[id])
     self:sync()
@@ -184,6 +210,8 @@ function Features:step(now)
                 elseif id == "charge" then c.charging = self:fire({"Charging"}, true)
                 elseif id == "meditate" then self:equipMeditationWeights()
                 elseif id == "lock" then self:lockNearest()
+                elseif id == "dragonStones" then Stones.quest(c, self)
+                elseif id == "superStones" then Stones.super(c, self)
                 else Effects.step(id, c, self, now) end
             end)
             if not ok then

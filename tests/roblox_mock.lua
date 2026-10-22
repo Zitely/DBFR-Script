@@ -99,8 +99,23 @@ function methods:GetDescendants()
     collect(self)
     return result
 end
-function methods:FindFirstChild(name)
+function methods:FindFirstChild(name, recursive)
     for _, child in ipairs(self.children) do if child.Name == name then return child end end
+    if recursive then
+        for _, child in ipairs(self.children) do
+            local found = child:FindFirstChild(name, true)
+            if found then return found end
+        end
+    end
+end
+function methods:Clone()
+    local copy = M.object(self.ClassName, self.Name)
+    for key, value in pairs(self.props) do
+        if key ~= "Parent" and not (type(value) == "table" and value.listeners) then copy[key] = value end
+    end
+    for key, value in pairs(self.attributes) do copy:SetAttribute(key, value) end
+    for _, child in ipairs(self.children) do child:Clone().Parent = copy end
+    return copy
 end
 function methods:WaitForChild(name) return assert(self:FindFirstChild(name), "Missing mock child " .. name) end
 function methods:FindFirstChildOfClass(class)

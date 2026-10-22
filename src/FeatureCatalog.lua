@@ -25,6 +25,13 @@ Catalog.controls = {
     {"QOL", "save", "Auto Save Player Data · every 30s", "toggle"},
     {"QOL", "antiAfk", "Anti-AFK Protection", "toggle"},
     {"QOL", "shake", "Reduce Screen Shake", "toggle"},
+    {"QOL", "questName", "Quest Name", "text", "MilkMission", "quest"},
+    {"QOL", "questDragonStones", "Dragon Stones Amount", "text", "999", "amount"},
+    {"QOL", "questZeni", "Zeni Amount", "text", "99999", "amount"},
+    {"QOL", "questSuperStones", "Super Dragon Stones Reward", "text", "999", "amount"},
+    {"QOL", "dragonStones", "Dragon Stones Quest · once per enable", "toggle"},
+    {"QOL", "superStoneTarget", "Super Dragon Stones Local Target", "text", "999999", "amount"},
+    {"QOL", "superStones", "Super Dragon Stones · local lock", "toggle"},
     {"Travel", "enterHTC", "Enter HTC · bypass costs 60,000 Zeni", "button"},
 }
 Catalog.destinations = {

@@ -181,6 +181,18 @@ function UI:addSlider(page, id, title, minimum, maximum, value, callback)
     end)
     update(value, false)
 end
+function UI:addTextBox(page, id, title, value, callback)
+    local c = self:controlRow(page, id, title, 88)
+    c.label = label(c.row, title, 9, 2, 296, 22, 11, C.gold, true)
+    c.input = new("TextBox", c.row, {Position = UDim2.fromOffset(9, 27), Size = UDim2.fromOffset(296, 30),
+        Text = tostring(value), PlaceholderText = title, ClearTextOnFocus = false,
+        BackgroundColor3 = C.bg, BorderSizePixel = 0, TextColor3 = C.text,
+        TextSize = 12, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left})
+    round(c.input, 5)
+    c.status = label(c.row, "Edit, then press Enter or click away", 9, 60, 296, 24, 9, C.muted)
+    c.status.TextWrapped = true
+    self.connections[#self.connections + 1] = c.input.FocusLost:Connect(function() callback(c.input.Text) end)
+end
 function UI:setControlEnabled(id, enabled)
     local c = self.controls[id]
     if c and c.button then

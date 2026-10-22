@@ -10,15 +10,23 @@ local Features = require("src.Features")
 local TeleportResume = require("src.TeleportResume")
 local Overnight = require("src.Overnight")
 local Main = {}
-local VERSION = "1.6.0"
+local VERSION = "1.7.0"
 
-function Main.start()
-    local env = type(getgenv) == "function" and getgenv() or _G
-    local arrival = env.__DBFR_TELEPORT_RESUME
-    env.__DBFR_TELEPORT_RESUME, env.__DBFR_AUTORESUME = nil, nil
-    if env.__DBFR_APP then env.__DBFR_APP.unload() end
+local function start(env)
     local player = game:GetService("Players").LocalPlayer
     assert(player, "Run Chamber from the local Roblox client")
+    local session = TeleportResume.new(env, player)
+    local arrival = session:readArrival()
+    local previous = env.__DBFR_APP
+    -- Auto-exec and the teleport queue may both run the loader. Reuse the
+    -- current client instance, including its toggle, loading phase and fees.
+    if previous and previous.version == VERSION and previous.client == game
+        and previous.player == player and previous.placeId == game.PlaceId then
+        if arrival then previous.resumeTeleport(arrival) end
+        return previous
+    end
+    env.__DBFR_AUTORESUME = nil
+    if previous then previous.unload() end
     local http = game:GetService("HttpService")
     local storage = "DBFR_Lua/settings.json"
     local saved = {}
@@ -30,7 +38,6 @@ function Main.start()
     -- Removed AFK/resume flags are intentionally ignored by Config.new.
     local config = Config.new(savedConfig)
     local ui, engine, bindings, rhythm, features, cycle
-    local session = TeleportResume.new(env, player)
     local input = Input.new(env)
     local live = true
     local actionRunning, nextEngine, nextUI, nextHealthCheck, lastTick = false, 0, 0, 0, -math.huge
@@ -127,14 +134,27 @@ function Main.start()
     bindings = Bindings.new(player, saved.bindings, ui.gui)
     features = Features.new(player, ui, function() return engine.active or actionRunning end, saved.hub, function(id, kind)
         if id == "meditate" and not engine.active then release(); bindings:pause(); wasPlaying = false end
-        if kind == "slider" then hubSettingsDirty = true end
+        if kind == "slider" or kind == "text" then hubSettingsDirty = true end
     end, env, session)
     cycle = Overnight.new(player, engine, config, session, env, function(reason)
         engine:halt(os.clock(), reason)
         release(); bindings:pause(); wasPlaying = false
         save(); ui:updateFeature("chamber", engine, rhythm, os.clock())
     end)
-    env.__DBFR_APP = {unload = unload, toggle = toggle, version = VERSION, ui = ui, scanner = bindings, features = features}
+    local function resumeTeleport(ticket)
+        if not live or not session:isArrival(ticket) then return end
+        local consumed, reason = pcall(session.consumeArrival, session, ticket)
+        if not consumed then
+            log("Could not resume teleport: " .. tostring(reason))
+            return
+        end
+        if ticket.mode == "manual" or engine.active then return end
+        engine:setActive(true, os.clock())
+        cycle:resume(ticket.mode)
+        features:sync(); save(); ui:updateFeature("chamber", engine, rhythm, os.clock())
+    end
+    env.__DBFR_APP = {unload = unload, toggle = toggle, version = VERSION, ui = ui, scanner = bindings, features = features,
+        client = game, player = player, placeId = game.PlaceId, resumeTeleport = resumeTeleport}
     log("Chamber " .. VERSION .. " loaded. Use the Chamber toggle to start or stop; Right Shift shows or hides the hub.")
     log(input:description())
     if type(env.writefile) ~= "function" then log("File storage unavailable: settings last for this session only") end
@@ -270,14 +290,23 @@ function Main.start()
             save(); ui:updateFeature("chamber", engine, rhythm, now)
         end
     end)
-    if type(arrival) == "table" and arrival.target == game.PlaceId and arrival.userId == player.UserId
-        and ((arrival.mode == "earth" and game.PlaceId == session.earthPlaceId)
-            or (arrival.mode == "train" and game.PlaceId == TeleportResume.HTC))
-        and type(arrival.issued) == "number" and os.time() - arrival.issued >= 0 and os.time() - arrival.issued <= 600 then
-        engine:setActive(true, os.clock())
-        cycle:resume(arrival.mode)
-        features:sync(); save(); ui:updateFeature("chamber", engine, rhythm, os.clock())
-    end
+    if arrival then resumeTeleport(arrival) end
     return env.__DBFR_APP
+end
+function Main.start()
+    local env = type(getgenv) == "function" and getgenv() or _G
+    -- Serialize startup across separately compiled bundles if one yields while
+    -- waiting for PlayerGui. A second loader must not create another hub.
+    local deadline = os.clock() + 30
+    while env.__DBFR_STARTING and env.__DBFR_STARTING.client == game do
+        assert(os.clock() < deadline, "Saiyan Hub is still loading; try again shortly")
+        task.wait()
+    end
+    local pending = {client = game}
+    env.__DBFR_STARTING = pending
+    local ok, app = pcall(start, env)
+    if env.__DBFR_STARTING == pending then env.__DBFR_STARTING = nil end
+    if not ok then error(app, 0) end
+    return app
 end
 return Main

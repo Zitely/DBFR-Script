@@ -1,8 +1,8 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.6.0 replaces the 20-minute
-AFK wait with automatic Earth → HTC travel at one minute remaining.**
+orange and gold Dragon Ball themed hub. **Version 1.7.0 adds Dragon Stones controls
+and preserves Chamber across duplicate teleport reloads.**
 Movement, Combat, Visuals, QOL, and Travel
 tabs sit alongside the existing Chamber toggle. Right Shift
 shows or hides the hub; the top-right controls minimize or exit. Detection is
@@ -34,8 +34,10 @@ to pause, or × to exit. Execute the full script again to reopen after exiting.
 
 The panel displays its version, current action, and bottom-right HTC timer. Fresh execution
 starts with Chamber off; an automatic overnight teleport resumes the active cycle.
-Running the script again unloads its previous instance,
-releases held inputs, and disconnects the old loop before creating the new panel.
+Running the same build again reuses its existing panel, toggle states, and loop.
+An updated build unloads the previous instance before creating its new panel.
+Teleport startup reads the saved continuation itself, so executor auto-exec and
+the queued loader can run in either order without turning Chamber off.
 Turning Chamber on during an existing minigame adopts it after three observations
 of the game's active training state. It moves the pointer away from the hub before
 sending inputs. Recovery waits for a fresh Start after respawn and uses the game's
@@ -47,7 +49,7 @@ after a respawn.
 
 ## Optional hub tools
 
-All additional toggles start **off**, including Anti-AFK. Slider preferences are
+All additional toggles start **off** on a fresh launch, including Anti-AFK. Slider and text-field preferences are
 saved locally when executor storage is available; feature toggles are not resumed
 automatically. Adjust FOV to apply an override; **Restore Game FOV** removes it.
 
@@ -56,7 +58,7 @@ automatically. Adjust FOV to apply an override; **Restore Game FOV** removes it.
 | Movement | Speed boost and walk speed, infinite jump, noclip, Saiyan flight and flight speed |
 | Combat | Fast punch, Ki blasts, block/parry, face nearest living player, transformation, one-second Ki recharge |
 | Visuals | Player ESP, NPC ESP, fullbright, clear sky/fog removal, FOV and FOV restoration |
-| QOL | Auto Meditate, Ki charge, Dragon Ball radar with distance and notifications, data save every 30 seconds, Anti-AFK, reduced screen shake |
+| QOL | Auto Meditate, Ki charge, Dragon Ball radar with distance and notifications, data save every 30 seconds, Anti-AFK, reduced screen shake, Dragon Stones quest fields, Super Dragon Stones local lock |
 | Travel | Manual HTC entry/cooldown fee, Earth spawn, West City, Satan City, Ginger Town, Nam's Village, Mr. Popo, Kame House, Gravity Chamber, training dummies |
 
 Flight uses WASD, E/Space to ascend, and Q to descend. These are movement inputs;
@@ -106,6 +108,33 @@ promise an instant maximum, and block/parry uses the game's blocking operation.
 Reduce Screen Shake preserves Roblox's normal camera update and removes later
 render-step offsets; it does not suppress every possible camera effect or alter
 scripted cameras/cutscenes.
+
+### Dragon Stones controls
+
+Under **QOL**, fill in **Quest Name**, **Dragon Stones Amount**, **Zeni Amount**,
+and **Super Dragon Stones Reward**, then enable **Dragon Stones Quest**. It runs
+once per enable, using the uploaded script's three `QuestOne` request forms.
+Turn it off and on again to make another request. Edited fields are saved on
+Enter or when focus leaves the box; enabling also validates any unfinished edit.
+Amounts must be whole numbers between 0 and 2147483647. The defaults are
+`MilkMission`, `999`, `99999`, and `999` respectively.
+
+The quest tool configures its own clone's reward values and completion flag before
+adding it to PlayerGui. Disabling it removes that clone and cancels unsent work.
+Missing quests or controls display a reason; sending a request does not establish
+that the server granted the entered rewards.
+
+**Super Dragon Stones · local lock** sets the local data value to the editable
+**Super Dragon Stones Local Target** (default `999999`) and checks it every half
+second while enabled. It updates the two supplied shop displays and sends the
+uploaded list of 12 daily quest requests once per enable, spaced half a second
+apart. Turning it off or exiting stops both and restores owned local changes.
+It follows replacement Data/shop objects after respawn.
+
+The local lock changes what this client sees; it does not establish a server-side
+balance or guarantee purchases. Daily quest requests are separate from that local
+display change. Both toggles start off on a fresh launch and after teleport;
+their text settings remain saved when executor storage is available.
 
 Switching off or exiting restores properties still owned by the effect and removes
 only this hub's highlights, flight movers, and connections. Player ESP refreshes
@@ -287,7 +316,8 @@ Automatic overnight travel requires a teleport queue (`queue_on_teleport` or a
 supported alias), `readfile`, `writefile`, `makefolder`, HTTP access, `loadstring`,
 and executor reattachment after teleport. No settings edit or manual file copy
 is needed. Missing queue/storage support stops the cycle before it teleports.
-The queued loader downloads the current public build on each hop.
+The queued loader downloads the current public build on each hop. If a download
+fails, its saved continuation remains available to the usual loader.
 
 `DBFR_Lua/teleport.json` stores a single-use continuation for the destination,
 player, and cycle phase; a ticket expires after ten minutes. Pausing or unloading
@@ -313,6 +343,7 @@ is a separate repository.
 | `src/Input.lua` | Smooth movement, cancellation, and input release |
 | `src/UI.lua` | Dragon Ball tabs, scrolling controls, and independent Chamber status |
 | `src/FeatureCatalog.lua`, `src/Features.lua` | Optional feature controls, scheduling, remote actions, and conflict handling |
+| `src/Stones.lua` | Validated quest requests, local Super Dragon Stones lock, and bounded daily requests |
 | `src/HTCEntry.lua` | Shared HTC cooldown/fee request and cancellable entry |
 | `src/Overnight.lua` | Earth/HTC round trip, readiness checks, and bounded teleport retries |
 | `src/TeleportResume.lua` | Destination-specific continuation tickets and queued public loader |
@@ -349,6 +380,10 @@ duplicate requests, failed teleport retries, cancellation, and reload without au
 Overnight tests execute queued code across simulated clients, covering repeated round
 trips, fee deduplication, character/data readiness, stale timers, bounded failures,
 missing executor capabilities, cancellation, and invalid or consumed tickets.
+Reload tests cover auto-exec ordering, repeated and concurrent startup, failed
+downloads, pause preservation, and compatibility with the previous queued loader.
+Stone tests cover text validation and persistence, request arguments and cadence,
+partial failure/cancellation, clone cleanup, and local-value restoration.
 It uses deterministic Roblox API doubles and does not render Roblox or validate
 live executor permissions. The source uses the Lua 5.1-compatible subset of Luau;
 the shipped application runs inside Roblox.
