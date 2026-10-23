@@ -1,6 +1,7 @@
 return function(test, equal, mock)
     local Main = require("src.Main")
     local Resume = require("src.TeleportResume")
+    local worldNumber = 0
     local function compileIn(source, environment)
         if type(setfenv) == "function" then
             local fn = assert(loadstring(source)); setfenv(fn, environment); return fn
@@ -13,6 +14,8 @@ return function(test, equal, mock)
         shared.http = shared.http or mock.http
         mock.http, mock.services.HttpService = shared.http, shared.http
         game.PlaceId, mock.player.UserId = place, 17
+        worldNumber = worldNumber + 1
+        game.JobId = "server-" .. worldNumber
         game.IsLoaded = function() return true end
         game.HttpGet = function(_, url)
             assert(url:find("/main/http_loader.lua", 1, true)); return "hub loader"
@@ -89,6 +92,84 @@ return function(test, equal, mock)
     local function readyTicks()
         mock.tick(7.1); mock.tick(0.2); mock.tick(0.2)
     end
+    local function disconnect(f)
+        mock.object("TextButton", "Reconnect", mock.object("ScreenGui", "Disconnect", mock.coreGui),
+            {Text = "Reconnect", AbsolutePosition = Vector2.new(550, 380), AbsoluteSize = Vector2.new(180, 40)})
+        if not f.app then f.app = Main.start(); f.app.toggle() end
+        mock.tick(0.1); mock.tick(2.1); mock.tick(0.2); mock.tick(2.1); mock.tick(0.2)
+    end
+    test("disconnect teleports directly to HTC without clicking and resumes minimized after loading", function()
+        local f = fixture(Resume.HTC)
+        disconnect(f)
+        equal(f.shared.teleports[1], Resume.HTC); equal(f.shared.fees, 0); equal(#mock.vim.events, 0)
+        local ticket = mock.http:JSONDecode(f.shared.files["DBFR_Lua/teleport.json"])
+        equal(ticket.mode, "rejoin"); equal(ticket.sourceJobId, game.JobId)
+        -- A second execution in the departing server must not consume an arrival.
+        equal(Main.start(), f.app)
+        executeQueue(f, f.shared.queues[1])
+        equal(mock.http:JSONDecode(f.shared.files["DBFR_Lua/teleport.json"]).active, true)
+        f = cross(f, Resume.HTC, false)
+        equal(f.app.ui.minimized, true); equal(f.app.ui.features.chamber.state.Text, "CYCLING")
+        readyTicks(); equal(f.shared.starts, 0)
+        mock.object("BoolValue", "AttackCheck", mock.character)
+        mock.tick(0.2); mock.tick(0.2); mock.tick(0.2)
+        equal(f.shared.starts, 1); equal(f.app.ui.minimized, true)
+        f.app.unload()
+    end)
+    test("HTC rejoin failures retry three times without inputs or fees", function()
+        local f = fixture(Resume.HTC); disconnect(f)
+        for attempt = 1, 3 do
+            equal(#f.shared.teleports, attempt)
+            f.teleport.TeleportInitFailed:Fire(mock.player, "Failure", "Server unavailable", Resume.HTC)
+            if attempt < 3 then
+                mock.tick(9); equal(#f.shared.teleports, attempt)
+                mock.tick(1.1)
+            end
+        end
+        equal(f.app.ui.features.chamber.state.Text, "PAUSED")
+        mock.tick(200); equal(#f.shared.teleports, 3); equal(#mock.vim.events, 0); equal(f.shared.fees, 0)
+        equal(mock.http:JSONDecode(f.shared.files["DBFR_Lua/teleport.json"]).active, false)
+        f.app.unload()
+    end)
+    test("a fresh client can resume when matchmaking returns it to the same HTC server", function()
+        local f = fixture(Resume.HTC); disconnect(f)
+        local source, server = f.shared.queues[1], game.JobId
+        f = fixture(Resume.HTC, f.shared)
+        game.JobId = server
+        executeQueue(f, source)
+        assert(f.app); equal(f.app.ui.features.chamber.state.Text, "CYCLING")
+        readyTicks(); equal(f.shared.starts, 1)
+        f.app.unload()
+    end)
+    test("stalled rejoin retries by teleport and pause revokes its continuation", function()
+        local f = fixture(Resume.HTC); disconnect(f)
+        mock.tick(151); mock.tick(10.1)
+        equal(#f.shared.teleports, 2)
+        local source = f.shared.queues[1]
+        f.app.toggle(); mock.tick(200); equal(#f.shared.teleports, 2)
+        f = fixture(Resume.HTC, f.shared); executeQueue(f, source)
+        equal(f.app, nil)
+    end)
+    test("later disconnects get a fresh rejoin budget and preserve timer-based travel", function()
+        local f = fixture(Resume.HTC)
+        for round = 1, 2 do
+            disconnect(f)
+            equal(f.shared.teleports[round], Resume.HTC)
+            f = cross(f, Resume.HTC); readyTicks()
+            mock.tick(0.2); mock.tick(1.3); mock.tick(0.2)
+            equal(f.shared.starts, round)
+        end
+        f.timer.Text = "0:01:00"; mock.tick(7138); mock.tick(0.2); mock.tick(0.2)
+        equal(f.shared.teleports[3], Resume.EARTH)
+        f.app.unload()
+    end)
+    test("missing queue support stops rejoin without clicking the disconnect dialog", function()
+        local f = fixture(Resume.HTC); mock.env.queue_on_teleport = nil
+        disconnect(f)
+        equal(f.app.ui.features.chamber.state.Text, "PAUSED")
+        equal(#f.shared.teleports, 0); equal(#mock.vim.events, 0)
+        f.app.unload()
+    end)
     test("loading the hub again after HTC arrival keeps Chamber on and waits before Start", function()
         local f = fixture(Resume.HTC); departure(f)
         f = cross(f, Resume.EARTH); readyTicks(); f = cross(f, Resume.HTC, false)

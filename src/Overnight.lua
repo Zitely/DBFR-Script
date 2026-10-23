@@ -48,9 +48,15 @@ function Overnight:depart()
     self.phase, self.since, self.nextAttempt, self.attempts = "depart_ready", os.clock(), 0, 0
     self:status("HTC has one minute left; returning to Earth")
 end
+function Overnight:rejoin()
+    self.session:check()
+    assert(type(game.JobId) == "string" and game.JobId ~= "", "The current server ID is unavailable for HTC rejoin")
+    self.phase, self.since, self.nextAttempt, self.attempts = "rejoin_ready", os.clock(), 0, 0
+    self:status("Disconnected; returning directly to HTC")
+end
 function Overnight:resume(mode)
     assert((mode == "earth" and game.PlaceId == self.session.earthPlaceId)
-        or (mode == "train" and game.PlaceId == Resume.HTC), "Unexpected overnight destination")
+        or ((mode == "train" or mode == "rejoin") and game.PlaceId == Resume.HTC), "Unexpected overnight destination")
     self.engine.timer:reset()
     self.engine.awaitFreshTimer = mode == "train"
     self.engine:transition("cycling", os.clock(), mode == "earth" and "Earth loaded; waiting for character and data"
@@ -58,8 +64,9 @@ function Overnight:resume(mode)
     self.phase, self.since, self.nextAttempt, self.attempts, self.fresh = mode == "earth" and "earth_loading" or "htc_loading",
         os.clock(), 0, 0, 0
 end
-function Overnight:sendEarth(now)
-    self.attempts, self.phase, self.since = self.attempts + 1, "departing", now
+function Overnight:sendTeleport(now, target, mode, phase, retryPhase, message)
+    self.attempts, self.phase, self.since = self.attempts + 1, phase, now
+    self.teleportTarget, self.teleportPhase, self.teleportRetryPhase = target, phase, retryPhase
     local token = self.token
     task.spawn(function()
         if not self:active() or self.token ~= token then return end
@@ -67,16 +74,16 @@ function Overnight:sendEarth(now)
             local teleport = game:GetService("TeleportService")
             if not self.failureConnection then
                 self.failureConnection = teleport.TeleportInitFailed:Connect(function(player, _, detail, placeId)
-                    if self:active() and self.phase == "departing" and player == self.player
-                        and placeId == self.session.earthPlaceId then self:failed(detail, true, "depart_ready") end
+                    if self:active() and self.phase == self.teleportPhase and player == self.player
+                        and placeId == self.teleportTarget then self:failed(detail, true, self.teleportRetryPhase) end
                 end)
             end
-            self.session:prepare(self.session.earthPlaceId, "earth")
+            self.session:prepare(target, mode)
             if not self:active() or self.token ~= token then self.session:cancel(); return end
-            self:status("Teleporting to Earth…")
-            teleport:Teleport(self.session.earthPlaceId, self.player)
+            self:status(message)
+            teleport:Teleport(target, self.player)
         end)
-        if not ok and self:active() and self.token == token then self:failed(reason, true, "depart_ready") end
+        if not ok and self:active() and self.token == token then self:failed(reason, true, retryPhase) end
     end)
 end
 function Overnight:characterReady()
@@ -94,8 +101,14 @@ function Overnight:step(now, snapshot)
     if now < (self.nextPoll or 0) then return true end
     self.nextPoll = now + 0.1
     if self.phase == "depart_ready" then
-        if now >= self.nextAttempt then self:sendEarth(now) end
-    elseif self.phase == "departing" or self.phase == "entering" or self.phase == "checking_entry" then
+        if now >= self.nextAttempt then
+            self:sendTeleport(now, self.session.earthPlaceId, "earth", "departing", "depart_ready", "Teleporting to Earth…")
+        end
+    elseif self.phase == "rejoin_ready" then
+        if now >= self.nextAttempt then
+            self:sendTeleport(now, Resume.HTC, "rejoin", "rejoining", "rejoin_ready", "Teleporting back into HTC…")
+        end
+    elseif self.phase == "departing" or self.phase == "rejoining" or self.phase == "entering" or self.phase == "checking_entry" then
         if now - self.since >= self.config.loadTimeout then
             if self.entry.busy then
                 -- An InvokeServer call cannot be cancelled. Invalidate it and
@@ -103,7 +116,7 @@ function Overnight:step(now, snapshot)
                 self:failed("Server entry request timed out", false)
             else
                 self:failed("Teleport did not finish", true,
-                    self.phase == "departing" and "depart_ready" or "earth_loading")
+                    self.phase == "departing" and "depart_ready" or self.phase == "rejoining" and "rejoin_ready" or "earth_loading")
             end
         end
     else

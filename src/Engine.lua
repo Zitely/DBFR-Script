@@ -5,7 +5,7 @@ Engine.__index = Engine
 function Engine.new(config, log)
     return setmetatable({config = config, log = log or function() end, timer = Timer.new(),
         state = "paused", active = false, generation = 0, startCount = 0,
-        recoveryCount = 0, reconnectCount = 0, sessions = 0, status = "Ready when you are",
+        recoveryCount = 0, sessions = 0, status = "Ready when you are",
         nextModal = 0, modalFrames = 0, fresh = 0}, Engine)
 end
 function Engine:transition(state, now, message)
@@ -14,11 +14,11 @@ function Engine:transition(state, now, message)
 end
 function Engine:setActive(enabled, now)
     self.generation = self.generation + 1
-    self.active, self.pending = enabled, nil
+    self.active, self.pending, self.travelRequest = enabled, nil, nil
     self.fresh, self.modalFrames, self.modalCandidate = 0, 0, false
     self.nextModal, self.nextRecovery = 0, now
     if enabled then
-        self.startCount, self.recoveryCount, self.reconnectCount = 0, 0, 0
+        self.startCount, self.recoveryCount = 0, 0
         self.requiresStart, self.nextStart = true, now
         self.mayAdopt = true
         self:transition("seeking", now, "Looking for the training Start button")
@@ -59,12 +59,8 @@ function Engine:complete(action, ok, now, reason)
         self:transition("respawn_confirm", now, "Waiting for the Respawn confirmation")
     elseif action.kind == "confirm" then
         self:waitForRespawn(now, "Waiting for your character to respawn", now + self.config.respawnWait)
-    elseif action.kind == "reconnect" then
-        self.mayAdopt = false
-        self.reconnectCount = self.reconnectCount + 1
-        self.timer:reset()
-        self.nextReconnect = now + self.config.reconnectCooldown
-        self:transition("reconnecting", now, "Reconnect pressed; waiting for the new session")
+    elseif action.kind == "rejoin" then
+        self.travelRequest = nil
     end
 end
 function Engine:step(s, now)
@@ -75,44 +71,29 @@ function Engine:step(s, now)
         self.nextTimer = now + 1.2
     end
     -- Cross-server travel owns input until the destination is ready.
-    if self.state == "cycling" then return nil end
-    -- Unexpected disconnects retain the existing reconnect fallback.
+    if self.state == "cycling" then
+        -- An older click may still be releasing when the disconnect cancels
+        -- it. Keep the handoff pending until Main can start teleport recovery.
+        if self.travelRequest and not self.pending then return self:action(self.travelRequest, now) end
+        return nil
+    end
+    -- Confirm the disconnect overlay, then hand control to teleport recovery.
     if now >= self.nextModal then
         self.nextModal = now + c.reconnectPoll
         self.modalFrames = s.reconnect and self.modalFrames + 1 or 0
         self.modalCandidate = s.reconnect == true
     end
     if self.modalCandidate then
-        if self.modalFrames >= 2 and self.state ~= "reconnecting" then
+        if self.modalFrames >= 2 and c.autoReconnect and not c.dryRun then
             self.generation = self.generation + 1
             self.pending, self.fresh = nil, 0
-            self.reconnectCount, self.nextReconnect = 0, now
-            self:transition("reconnecting", now, "Reconnect button confirmed")
-        end
-        if self.modalFrames >= 2 and not self.pending and c.autoReconnect and not c.dryRun then
-            if now >= (self.nextReconnect or 0) then
-                if self.reconnectCount >= c.reconnectAttempts then
-                    self:halt(now, "Reconnect retry limit reached; check Roblox")
-                else return self:action("reconnect", now) end
-            end
+            self.travelRequest = "rejoin"
+            self:transition("cycling", now, "Disconnected; preparing to teleport back into HTC")
+            return self:action("rejoin", now)
         end
         return nil
     end
     if self.pending then return nil end
-    if self.state == "reconnecting" then
-        if now - self.since > c.loadTimeout then
-            self:halt(now, "Reconnect loading timed out")
-        elseif s.start then
-            self.startCount, self.requiresStart, self.fresh = 0, true, 0
-            self.nextStart = now + c.loadWait
-            self:transition("loading", now, "Hub returned; allowing the character to load")
-        end
-        return nil
-    end
-    if self.state == "loading" and now - self.since > c.loadTimeout then
-        self:halt(now, "The hub did not become ready")
-        return nil
-    end
     local remaining = self.timer:remaining(now)
     if self.awaitFreshTimer and remaining and remaining > c.cycleAtSeconds then self.awaitFreshTimer = false end
     if self.awaitFreshTimer and now - (self.freshTimerSince or now) > c.loadTimeout then
@@ -203,7 +184,7 @@ function Engine:step(s, now)
                 and "Training detected; waiting for prompt recognition" or "Training active — ki flowing"
             if self.state ~= "training" then
                 self.sessions = self.sessions + 1
-                self.startCount, self.reconnectCount = 0, 0
+                self.startCount = 0
                 if not s.trainingKnown or s.bindingsReady then self.recoveryCount = 0 end
                 self:transition("training", now, message)
             else self.status = message end

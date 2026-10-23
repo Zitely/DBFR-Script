@@ -10,7 +10,7 @@ local Features = require("src.Features")
 local TeleportResume = require("src.TeleportResume")
 local Overnight = require("src.Overnight")
 local Main = {}
-local VERSION = "1.7.0"
+local VERSION = "1.7.1"
 
 local function start(env)
     local player = game:GetService("Players").LocalPlayer
@@ -234,9 +234,11 @@ local function start(env)
                         local valid = function() return live and engine.active and engine.generation == action.generation end
                         local succeeded, detail
                         local ready = true
-                        if action.kind == "cycle" then
+                        if action.kind == "cycle" or action.kind == "rejoin" then
                             bindings:pause(); wasPlaying = false
-                            if valid() then succeeded, detail = pcall(cycle.depart, cycle) end
+                            if valid() then
+                                succeeded, detail = pcall(action.kind == "rejoin" and cycle.rejoin or cycle.depart, cycle)
+                            end
                             engine:complete(action, succeeded, os.clock(), detail)
                             actionRunning = false
                             if live then save(); ui:updateFeature("chamber", engine, rhythm, os.clock()) end

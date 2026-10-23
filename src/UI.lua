@@ -27,7 +27,7 @@ local function set(object, key, value)
     if object[key] ~= value then object[key] = value end
 end
 function UI.new(parent, onClose, version)
-    local self = setmetatable({features = {}, order = {}, connections = {}, minimized = false,
+    local self = setmetatable({features = {}, order = {}, connections = {}, minimized = true,
         pages = {}, pageOrder = {}, controls = {}}, UI)
     self.gui = new("ScreenGui", parent, {Name = "DBFR_SaiyanControl", ResetOnSpawn = false,
         IgnoreGuiInset = true, DisplayOrder = 10000, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
@@ -95,6 +95,7 @@ function UI.new(parent, onClose, version)
     self.connections[#self.connections + 1] = uis.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false; self.dragSlider = nil end
     end)
+    self:setMinimized(true)
     return self
 end
 function UI:setMinimized(minimized)

@@ -12,7 +12,10 @@ task.spawn(function()
     if not player or type(env.readfile) ~= "function" or type(env.writefile) ~= "function" then return end
     local http = game:GetService("HttpService")
     local ok, ticket = pcall(function() return http:JSONDecode(env.readfile("DBFR_Lua/teleport.json")) end)
+    local origin = env.__DBFR_DEPARTURE
     if not ok or type(ticket) ~= "table" or ticket.active ~= true or ticket.target ~= game.PlaceId
+        or (origin and origin.client == game and origin.player == player and origin.jobId == game.JobId
+            and origin.issued == ticket.issued and origin.target == ticket.target and origin.mode == ticket.mode)
         or ticket.userId ~= player.UserId or type(ticket.issued) ~= "number"
         or os.time() - ticket.issued < 0 or os.time() - ticket.issued > 600 then return end
     -- Startup consumes the ticket only after the hub is constructed. A failed
@@ -29,10 +32,15 @@ function Resume.new(env, player, earthPlaceId)
 end
 function Resume.validPlace(id) return type(id) == "number" and id > 0 and id < math.huge and id % 1 == 0 end
 function Resume:isArrival(ticket)
+    local origin = self.env.__DBFR_DEPARTURE
+    local stillDeparting = type(ticket) == "table" and origin and origin.client == game and origin.player == self.player
+        and origin.jobId == game.JobId and origin.issued == ticket.issued
+        and origin.target == ticket.target and origin.mode == ticket.mode
     return type(ticket) == "table" and ticket.active == true and ticket.target == game.PlaceId
+        and not stillDeparting
         and ticket.userId == self.player.UserId
         and ((ticket.mode == "earth" and game.PlaceId == self.earthPlaceId)
-            or ((ticket.mode == "train" or ticket.mode == "manual") and game.PlaceId == Resume.HTC))
+            or ((ticket.mode == "train" or ticket.mode == "rejoin" or ticket.mode == "manual") and game.PlaceId == Resume.HTC))
         and type(ticket.issued) == "number" and os.time() - ticket.issued >= 0 and os.time() - ticket.issued <= 600
 end
 function Resume:readArrival()
@@ -50,6 +58,7 @@ function Resume:consumeArrival(ticket)
     assert(type(self.env.writefile) == "function", "Teleport continuation requires executor file storage")
     self.env.writefile(PATH, self.http:JSONEncode({active = false}))
     self.env.__DBFR_TELEPORT_RESUME = nil
+    self.env.__DBFR_DEPARTURE = nil
     -- Some executors preserve globals across places, but consume their queue.
     self.env.__DBFR_RELOAD_QUEUED = nil
 end
@@ -73,7 +82,12 @@ function Resume:prepare(target, mode)
     end
     pcall(self.env.makefolder, "DBFR_Lua") -- Existing folders may raise an error.
     local ticket = {active = true, target = target, mode = mode, userId = self.player.UserId,
-        issued = os.time(), earthPlaceId = self.earthPlaceId}
+        issued = os.time(), earthPlaceId = self.earthPlaceId,
+        sourceJobId = type(game.JobId) == "string" and game.JobId ~= "" and game.JobId or nil}
+    -- Keep the departure identity in this client's memory. A fresh client can
+    -- resume even if matchmaking sends it back to the same server/place.
+    self.env.__DBFR_DEPARTURE = {client = game, player = self.player, jobId = game.JobId,
+        issued = ticket.issued, target = target, mode = mode}
     self.env.writefile(PATH, self.http:JSONEncode(ticket))
     local check = self.http:JSONDecode(self.env.readfile(PATH))
     assert(type(check) == "table" and check.active and check.target == target and check.mode == mode,
@@ -87,6 +101,7 @@ function Resume:prepare(target, mode)
 end
 function Resume:cancel()
     self.env.__DBFR_TELEPORT_RESUME = nil
+    self.env.__DBFR_DEPARTURE = nil
     if type(self.env.writefile) == "function" then
         local ok, reason = pcall(function() self.env.writefile(PATH, self.http:JSONEncode({active = false})) end)
         return ok, reason

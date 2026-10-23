@@ -1,8 +1,8 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.7.0 adds Dragon Stones controls
-and preserves Chamber across duplicate teleport reloads.**
+orange and gold Dragon Ball themed hub. **Version 1.7.1 opens minimized and
+recovers from disconnects by teleporting directly back into HTC.**
 Movement, Combat, Visuals, QOL, and Travel
 tabs sit alongside the existing Chamber toggle. Right Shift
 shows or hides the hub; the top-right controls minimize or exit. Detection is
@@ -18,7 +18,8 @@ counters using the game controller and Minigame module supplied by the user.
    ```
 
    It downloads the current Chamber build from `main` every time you execute it.
-2. On Earth or in HTC, click **CHAMBER AUTO TRAIN** to turn automation on.
+2. Click the header's **+** to expand the hub. On Earth or in HTC, click
+   **CHAMBER AUTO TRAIN** to turn automation on.
    Click the same button again to stop. Drag the header to move the panel.
    On Earth it enters HTC; inside HTC it starts training. Overnight travel uses
    the game's 60,000-Zeni re-entry option when a cooldown is active.
@@ -29,6 +30,7 @@ counters using the game controller and Minigame module supplied by the user.
 | Top-right − / + | Minimize to the header / restore the feature rows |
 | Top-right × | Stop automation, release inputs, and completely unload the hub |
 
+Every fresh load, including teleport arrivals, opens minimized to the header.
 Hiding or minimizing keeps Chamber running if it is on. Use its feature toggle
 to pause, or × to exit. Execute the full script again to reopen after exiting.
 
@@ -291,19 +293,25 @@ the Roblox window and has no desktop monitor selection.
   Nightmare, equips weights, and presses Start through the existing code.
   A verified timer above one minute must appear before another automatic trip;
   if the timer does not renew within 150 seconds, the hub pauses.
-- **Unexpected disconnects:** still use the Reconnect button fallback. It confirms
-  two observations, approaches smoothly, hovers, and clicks. It allows three
-  attempts with a nine-second cooldown after
-  each click, waits seven seconds after the hub returns, and starts again. Retry
-  counts reset for later disconnects. Reconnecting clears the old session timer.
+- **Unexpected disconnects:** two observations of the Reconnect dialog trigger
+  a direct teleport to HTC (`4178935231`). The dialog button is never clicked.
+  This uses the teleport queue and saved continuation to restore active Chamber
+  in the destination, then waits for the same character/control readiness checks.
+  It permits up to three teleport attempts, ten seconds apart after a failure,
+  and pauses with a reason if Roblox rejects the requests or loading times out.
+  Each later disconnect receives a new retry budget. No re-entry fee remote is
+  sent by this direct rejoin operation; the one-minute Earth cycle still uses
+  the normal cooldown-fee entry path.
 - **Off:** cancels pending actions, releases inputs, and stops discovery. Errors
   stop Chamber and display a reason below its toggle. Additional details appear
   in the executor console.
 
 Defaults live in `src/Config.lua`; previous configuration remains readable from
 `DBFR_Lua/settings.json` when executor file functions are available. There is no
-settings page. Old `afkMinutes`, `afkDurationMinutes`, and `resumeAfterTeleport`
-settings are ignored. The new cycle starts at `cycleAtSeconds = 60` by default.
+settings page. Old `afkMinutes`, `afkDurationMinutes`, `resumeAfterTeleport`,
+`reconnectCooldown`, and `reconnectAttempts` settings are ignored. Rejoin retries
+use `teleportAttempts` and `teleportRetryDelay`; `autoReconnect` controls automatic
+disconnect recovery. The overnight cycle starts at `cycleAtSeconds = 60` by default.
 
 ## Executor compatibility
 
@@ -335,7 +343,7 @@ is a separate repository.
 
 | File | Purpose |
 | --- | --- |
-| `src/Engine.lua` | Training, recovery, cycle trigger, and reconnect state machine |
+| `src/Engine.lua` | Training, recovery, overnight cycle and HTC rejoin triggers |
 | `src/Rhythm.lua` | Note motion, input timing, and spam lifecycle |
 | `src/GuiIndex.lua` | Bounded discovery and GUI event subscriptions |
 | `src/Bindings.lua` | Automatic recognition and cached candidate sampling |
@@ -345,7 +353,7 @@ is a separate repository.
 | `src/FeatureCatalog.lua`, `src/Features.lua` | Optional feature controls, scheduling, remote actions, and conflict handling |
 | `src/Stones.lua` | Validated quest requests, local Super Dragon Stones lock, and bounded daily requests |
 | `src/HTCEntry.lua` | Shared HTC cooldown/fee request and cancellable entry |
-| `src/Overnight.lua` | Earth/HTC round trip, readiness checks, and bounded teleport retries |
+| `src/Overnight.lua` | Earth/HTC round trip, direct HTC rejoin, readiness checks, and bounded teleport retries |
 | `src/TeleportResume.lua` | Destination-specific continuation tickets and queued public loader |
 | `src/HubEffects.lua`, `src/EffectScope.lua` | Movement/visual effects with reversible property and connection ownership |
 | `src/WorldMarkers.lua` | Bounded NPC/radar discovery and owned marker cleanup |
@@ -382,6 +390,8 @@ trips, fee deduplication, character/data readiness, stale timers, bounded failur
 missing executor capabilities, cancellation, and invalid or consumed tickets.
 Reload tests cover auto-exec ordering, repeated and concurrent startup, failed
 downloads, pause preservation, and compatibility with the previous queued loader.
+Direct rejoin tests cover no button input, retry limits, timeout/cancellation,
+loading readiness, repeated disconnects, and returning to the same place/server.
 Stone tests cover text validation and persistence, request arguments and cadence,
 partial failure/cancellation, clone cleanup, and local-value restoration.
 It uses deterministic Roblox API doubles and does not render Roblox or validate
