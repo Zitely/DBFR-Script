@@ -14,6 +14,7 @@ Catalog.controls = {
     {"Combat", "lock", "Face Nearest Player", "toggle"},
     {"Combat", "transform", "Auto Super Saiyan Transformation", "toggle"},
     {"Combat", "recharge", "Recharge Ki", "button"},
+    {"Visuals", "cosmetics", "Cosmetic Unlocker · local catalog", "toggle"},
     {"Visuals", "players", "Ki Sense · Player ESP", "toggle"},
     {"Visuals", "npcs", "NPC / Mob ESP", "toggle"},
     {"Visuals", "bright", "Fullbright Lighting", "toggle"},

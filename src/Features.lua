@@ -4,12 +4,15 @@ local Effects = require("src.HubEffects")
 local Weights = require("src.Weights")
 local HTCEntry = require("src.HTCEntry")
 local Stones = require("src.Stones")
+local Cosmetics = require("src.Cosmetics")
+local CosmeticBrowser = require("src.CosmeticBrowser")
 local Features = {}
 Features.__index = Features
 local intervals = {speed = 0.1, jump = 0.2, noclip = 0, flight = 0,
     punch = 0.1, blast = 0.15, block = 0.3, lock = 0.2, transform = 1,
     bright = 1, sky = 1, players = 1, npcs = 0.1, radar = 0.1, fov = 0.2,
-    meditate = 2, charge = 0.2, save = 30, antiAfk = 1, shake = 1, dragonStones = 0.5, superStones = 0.5}
+    meditate = 2, charge = 0.2, save = 30, antiAfk = 1, shake = 1, dragonStones = 0.5, superStones = 0.5,
+    cosmetics = 0.05}
 local conflicts = {speed = true, jump = true, noclip = true, flight = true,
     punch = true, blast = true, block = true, lock = true, transform = true,
     meditate = true, charge = true, antiAfk = true, fov = true, shake = true}
@@ -44,6 +47,11 @@ function Features.new(player, ui, blocked, saved, onChange, env, session)
         elseif kind == "toggle" then
             ui:addToggle(page, id, title, function() self:set(id, not self.enabled[id]) end)
         else ui:addButton(page, id, title, function() self:action(id) end) end
+        if id == "cosmetics" then
+            self.cosmeticBrowser = CosmeticBrowser.new(ui,
+                function(item) self:cosmeticAction("equip", item) end,
+                function() self:cosmeticAction("save") end)
+        end
     end
     ui:addButton("Visuals", "resetFov", "Restore Game FOV", function() self:set("fov", false) end)
     self.htcEntry = HTCEntry.new(player, function()
@@ -56,6 +64,12 @@ function Features.new(player, ui, blocked, saved, onChange, env, session)
             end} or nil)
     self:status("enterHTC", "No cooldown: free entry. Active cooldown: 60,000 Zeni.")
     return self
+end
+function Features:cosmeticAction(action, item)
+    if not self.live then return end
+    local c = self.contexts.cosmetics
+    if not c or not c.cosmetics then self:status("cosmeticBrowser", "Enable Cosmetic Unlocker to browse."); return end
+    if action == "equip" then c.cosmetics:equip(item) else c.cosmetics:save() end
 end
 function Features:commitText(id, text)
     if not self.live then return false end
@@ -212,6 +226,13 @@ function Features:step(now)
                 elseif id == "lock" then self:lockNearest()
                 elseif id == "dragonStones" then Stones.quest(c, self)
                 elseif id == "superStones" then Stones.super(c, self)
+                elseif id == "cosmetics" then
+                    if not c.cosmetics then
+                        c.cosmetics = Cosmetics.new(self)
+                        c.scope.cleanup[#c.scope.cleanup + 1] = function() c.cosmetics:destroy() end
+                        c.cosmetics:message("Local entries only; the server decides what you own.")
+                    end
+                    c.cosmetics:step(now)
                 else Effects.step(id, c, self, now) end
             end)
             if not ok then

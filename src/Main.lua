@@ -10,7 +10,7 @@ local Features = require("src.Features")
 local TeleportResume = require("src.TeleportResume")
 local Overnight = require("src.Overnight")
 local Main = {}
-local VERSION = "1.7.1"
+local VERSION = "1.8.0"
 
 local function start(env)
     local player = game:GetService("Players").LocalPlayer

@@ -284,6 +284,7 @@ require("tests.features")(test, equal, mock)
 require("tests.htc_entry")(test, equal, mock)
 require("tests.overnight")(test, equal, mock)
 require("tests.stones")(test, equal, mock)
+require("tests.cosmetics")(test, equal, mock)
 
 print(string.format("\n%d tests passed; %d failed", passed, failed))
 assert(failed == 0, "Test suite failed")

@@ -1,8 +1,9 @@
 # DBFR-Script · Saiyan Hub
 
 A Lua/Luau Chamber training helper for a Roblox script executor, with a compact
-orange and gold Dragon Ball themed hub. **Version 1.7.1 opens minimized and
-recovers from disconnects by teleporting directly back into HTC.**
+orange and gold Dragon Ball themed hub. **Version 1.8.0 adds Cosmetic Unlocker
+under Visuals, with a searchable catalog and equip/save requests.** It opens
+minimized and recovers from disconnects by teleporting directly back into HTC.
 Movement, Combat, Visuals, QOL, and Travel
 tabs sit alongside the existing Chamber toggle. Right Shift
 shows or hides the hub; the top-right controls minimize or exit. Detection is
@@ -59,7 +60,7 @@ automatically. Adjust FOV to apply an override; **Restore Game FOV** removes it.
 | --- | --- |
 | Movement | Speed boost and walk speed, infinite jump, noclip, Saiyan flight and flight speed |
 | Combat | Fast punch, Ki blasts, block/parry, face nearest living player, transformation, one-second Ki recharge |
-| Visuals | Player ESP, NPC ESP, fullbright, clear sky/fog removal, FOV and FOV restoration |
+| Visuals | Cosmetic Unlocker and searchable equip browser, player ESP, NPC ESP, fullbright, clear sky/fog removal, FOV and FOV restoration |
 | QOL | Auto Meditate, Ki charge, Dragon Ball radar with distance and notifications, data save every 30 seconds, Anti-AFK, reduced screen shake, Dragon Stones quest fields, Super Dragon Stones local lock |
 | Travel | Manual HTC entry/cooldown fee, Earth spawn, West City, Satan City, Ginger Town, Nam's Village, Mr. Popo, Kame House, Gravity Chamber, training dummies |
 
@@ -110,6 +111,38 @@ promise an instant maximum, and block/parry uses the game's blocking operation.
 Reduce Screen Shake preserves Roblox's normal camera update and removes later
 render-step offsets; it does not suppress every possible camera effect or alter
 scripted cameras/cutscenes.
+
+### Cosmetic Unlocker
+
+Enable **Visuals → Cosmetic Unlocker · local catalog** to add the supplied
+outfit, accessory, and weapon entries to the game's Clothing menu and hide its
+chat-title lock icons locally. Existing entries are preserved. The browser below
+the toggle searches names literally (including `[` or `%`) and shows six items
+per page. **Equip** sends the upload's `OutfitChange` request for clothing or
+accessories. Weapons and copied drop/gamepass controls use their buttons in the
+game's own inventory; the upload supplies no quick-equip remote for those items.
+Quick-equip pauses while Chamber or Auto Meditate is running.
+
+A successful equip **request** schedules one best-effort game-save request after
+one second. **Request Game Save** can also be used after equipping through the
+game's menu. It uses the existing `Remotes.SaveFeature` / `Remotes.SaveData`
+RemoteEvent, with requests spaced at least ten seconds apart. Missing or failing
+remotes display a reason, and turning the toggle off cancels queued saves.
+
+**This does not permanently grant inventory ownership.** The upload clones local
+menu entries and hides local lock icons; neither operation writes the game's
+server inventory. `OutfitChange` and the save event provide no confirmation that
+an item was accepted or saved. Only the game's server can persist ownership, so
+locally added entries can still disappear when leaving. The feature never reports
+them as permanently unlocked. No client DataStore or invented unlock remote is used.
+
+The feature follows replacement Clothing UI after respawn while enabled. It
+starts off on a fresh launch/teleport. Disabling it or exiting removes only its
+cloned entries, previews, and listeners, and restores lock icons it still owns.
+Discovery processes at most four catalog entries per update and caps work at
+2,048 entries. At most twelve visible 3D previews are retained, with at most two
+created per update; previews outside the visible menu are released. Searching
+reuses the same six buttons instead of rebuilding hundreds of controls.
 
 ### Dragon Stones controls
 
